@@ -1,0 +1,2945 @@
+﻿<?xml version="1.0" encoding="utf-8"?><ManagementPack ContentReadable="true" SchemaVersion="2.0" OriginalSchemaVersion="1.1" xmlns:xsd="http://www.w3.org/2001/XMLSchema" xmlns:xsl="http://www.w3.org/1999/XSL/Transform">
+  <Manifest>
+    <Identity>
+      <ID>Proactive.TopProcess.Monitoring.Customizations</ID>
+      <Version>1.0.1.4</Version>
+    </Identity>
+    <Name>Proactive TopProcess Monitoring Customizations</Name>
+    <References>
+      <Reference Alias="Health">
+        <ID>System.Health.Library</ID>
+        <Version>7.0.8433.0</Version>
+        <PublicKeyToken>31bf3856ad364e35</PublicKeyToken>
+      </Reference>
+      <Reference Alias="MSIGL">
+        <ID>Microsoft.SystemCenter.InstanceGroup.Library</ID>
+        <Version>7.5.8501.0</Version>
+        <PublicKeyToken>31bf3856ad364e35</PublicKeyToken>
+      </Reference>
+      <Reference Alias="MWIIS6">
+        <ID>Microsoft.Windows.InternetInformationServices.2016</ID>
+        <Version>10.0.6.0</Version>
+        <PublicKeyToken>31bf3856ad364e35</PublicKeyToken>
+      </Reference>
+	  <Reference Alias="MWS6D">
+        <ID>Microsoft.Windows.Server.2016.Discovery</ID>
+        <Version>10.0.0.0</Version>
+        <PublicKeyToken>31bf3856ad364e35</PublicKeyToken>
+      </Reference>
+	  <Reference Alias="MWS6M">
+        <ID>Microsoft.Windows.Server.2016.Monitoring</ID>
+        <Version>10.0.0.0</Version>
+        <PublicKeyToken>31bf3856ad364e35</PublicKeyToken>
+      </Reference>
+      <Reference Alias="MWSL">
+        <ID>Microsoft.Windows.Server.Library</ID>
+        <Version>10.1.0.2</Version>
+        <PublicKeyToken>31bf3856ad364e35</PublicKeyToken>
+      </Reference>
+      <Reference Alias="SC">
+        <ID>Microsoft.SystemCenter.Library</ID>
+        <Version>7.0.8433.0</Version>
+        <PublicKeyToken>31bf3856ad364e35</PublicKeyToken>
+      </Reference>
+      <Reference Alias="SCCore">
+        <ID>Microsoft.SystemCenter.2007</ID>
+        <Version>7.1.10226.0</Version>
+        <PublicKeyToken>31bf3856ad364e35</PublicKeyToken>
+      </Reference>
+      <Reference Alias="System">
+        <ID>System.Library</ID>
+        <Version>7.5.8501.0</Version>
+        <PublicKeyToken>31bf3856ad364e35</PublicKeyToken>
+      </Reference>
+      <Reference Alias="Windows">
+        <ID>Microsoft.Windows.Library</ID>
+        <Version>7.5.8501.0</Version>
+        <PublicKeyToken>31bf3856ad364e35</PublicKeyToken>
+      </Reference>
+    </References>
+  </Manifest>
+  <TypeDefinitions>
+    <ModuleTypes>
+      <DataSourceModuleType ID="Proactive.TopProcess.Monitoring.Customizations.SummaryReport.Script.DataSource" Accessibility="Internal" Batching="false">
+        <Configuration>
+		  <xsd:element minOccurs="1" type="xsd:integer" name="TimeoutSeconds" xmlns:xsd="http://www.w3.org/2001/XMLSchema" />	
+        </Configuration>
+        <OverrideableParameters>
+		  <OverrideableParameter ID="TimeoutSeconds" Selector="$Config/TimeoutSeconds$" ParameterType="int" />
+        </OverrideableParameters>
+        <ModuleImplementation Isolation="Any">
+          <Composite>
+            <MemberModules>
+              <DataSource ID="Scheduler" TypeID="System!System.Scheduler">
+                <Scheduler>
+                  <WeeklySchedule>
+                    <Windows>
+                      <Daily>
+                        <Start>06:12</Start>
+                        <End>06:32</End>
+                        <DaysOfWeekMask>62</DaysOfWeekMask>
+                      </Daily>
+                    </Windows>
+                  </WeeklySchedule>
+                  <ExcludeDates />
+                </Scheduler>
+              </DataSource>
+              <ProbeAction ID="PA" TypeID="Windows!Microsoft.Windows.PowerShellPropertyBagTriggerOnlyProbe">
+                 <ScriptName>Proactive.TopProcess.Monitoring.Customizations.SummaryReport.Script.DS.v1014.ps1</ScriptName>
+                <ScriptBody>
+#=================================================================================
+#  Script to gather Proactive TopProcess alerts report
+#
+#  Author: Kevin Justin
+#  v1.0
+#=================================================================================
+
+
+# Constants section - modify stuff here:
+#=================================================================================
+# Assign script name variable for use in event logging.  
+# ScriptName should be the same as the ID of the module that the script is contained in
+$ScriptName = "Proactive.TopProcess.Monitoring.Customizations.SummaryReport.Script.DataSource.v1014.ps1"
+$EventID = "690"
+#=================================================================================
+
+
+# Starting Script section - All scripts get this
+#=================================================================================
+# Gather the start time of the script
+$StartTime = Get-Date
+#Set variable to be used in logging events
+$whoami = whoami
+# Load MOMScript API
+$momapi = New-Object -comObject MOM.ScriptAPI
+#Log script event that we are starting task
+$momapi.LogScriptEvent($ScriptName,$EventID,0,"Script is starting. `n Running as ($whoami).")
+#=================================================================================
+
+
+# PropertyBag Script section - Monitoring scripts get this
+#=================================================================================
+# Load SCOM PropertyBag function
+$bag = $momapi.CreatePropertyBag()
+#=================================================================================
+
+
+# Begin MAIN script section
+#=================================================================================
+
+#For a simple example - get files in Windows Temp:
+$date = get-date -uFormat "%Y-%m-%d"
+
+$momapi.LogScriptEvent($ScriptName,$EventID,0,"`n Gather Proactive TopProcess Services Alert report for date ($date).")
+
+$DSMessage = "Proactive DailyTasks Proactive TopProcess Alerts Summary Report for ($date)."
+
+
+# Grab past 24 hours
+if ( (get-date).DayOfWeek -ne "Monday" )
+	{
+	$Time = [DateTime](Get-Date).AddDays(-1)
+	}
+if ( (get-date).DayOfWeek -eq "Monday" )
+	{
+	$Time = [DateTime](Get-Date).AddDays(-3)
+	}
+
+
+#$ProactiveTopProcessAlerts = get-SCOMAlert -name "Proactive TopProcess*"
+$ProactiveTopProcessAlerts = get-scomalert | ?  { ( $_.Name -like "Proactive TopProcess *" ) `
+	} 
+	# | ? { $_.TimeRaised -ge $Time } 
+	
+$Test = $ProactiveTopProcessAlerts.Count
+
+
+# Open ADDS server alerts since last report
+$ProactiveTopProcessAlertsSinceReport = $ProactiveTopProcessAlerts | ? { $_.TimeRaised -gt $Time }
+$ProactiveTopProcessAlertsSinceReport
+$ProactiveTopProcessAlertsSinceReport.Count
+
+
+# Check for open alerts older than reporting period
+$OpenAlerts = $ProactiveTopProcessAlerts | ? { $_.ResolutionState -ne 255 } | ? { $_.TimeRaised -ge $Time }
+$OpenAlertDetail = $OpenAlerts | ft TimeRaised,NetbiosComputerName,Name -auto
+
+$OpenProactiveTopProcessAlertsSinceReport = $ProactiveTopProcessAlertsSinceReport | ? { $_.ResolutionState -ne 255 }
+$OpenProactiveTopProcessAlertsSinceReport.Count
+	
+# Alerts closed within report period $Time
+$ClosedAlerts = $ProactiveTopProcessAlerts | ? { $_.ResolutionState -eq 255 } | ? { $_.TimeRaised -ge $Time } 
+$ClosedAlertDetail = $ClosedAlerts | ft TimeRaised,NetbiosComputerName,Name -auto
+
+
+$Alerts = $ProactiveTopProcessAlerts | ft TimeRaised,NetbiosComputerName,Name -auto -wrap
+
+$AlertSorted = @()
+
+foreach ( $Name in $($ProactiveTopProcessAlerts.Name | sort -uniq) )
+	{
+	$AlertSorted += $Name
+	$AlertSorted +=	$ProactiveTopProcessAlerts | ? { $_.Name -eq $Name } | ft TimeRaised,NetbiosComputerName,Name -auto
+	$AlertSorted += "#====================================="
+	}
+
+$AlertSorted
+
+
+	
+# Build Report
+$TopProcessReport = @()
+
+if ( $ProactiveTopProcessAlerts.count -eq 0 )
+	{
+	$TopProcessReport += ""
+	$TopProcessReport += "ZERO Proactive TopProcess alerts for ($date)."
+	$TopProcessReport += ""
+	}
+
+if ( $ProactiveTopProcessAlerts.count -gt 0 )
+	{
+	$TopProcessReport += ""
+	$TopProcessReport += $DSMessage
+	$TopProcessReport += ""
+	$TopProcessReport += "#========================================================"
+	$TopProcessReport += "#"
+	$TopProcessReport += "# Total Proactive TopProcess alerts = $($ProactiveTopProcessAlerts.Count)"
+	$TopProcessReport += "#"
+	$TopProcessReport += "# OPEN alerts since last run = $($OpenProactiveTopProcessAlertsSinceReport.Count)"
+	$TopProcessReport += "# CLOSED alerts since last report run = $($ClosedAlerts.Count)"
+	$TopProcessReport += "#=================================================="
+	$TopProcessReport += "#"
+	$TopProcessReport += "# Total OPEN alerts"
+	$TopProcessReport += "#=================="
+	$TopProcessReport += "# Proactive TopProcess Service alerts = $($OpenAlerts.Count)"
+	$TopProcessReport += "#==============================================="
+	$TopProcessReport += "#"	
+	$TopProcessReport += "# Proactive TopProcess OPEN alert detail"
+	$TopProcessReport += "#========================================================"
+
+	if ( $OpenProactiveTopProcessAlertsSinceReport.Count -eq 0 )
+		{
+		$TopProcessReport += "ZERO OPEN Proactive TopProcess alerts servers for date ($date)."
+		$TopProcessReport += ""
+		}
+
+	if ( $OpenProactiveTopProcessAlertsSinceReport.Count -gt 0 )
+		{	
+		if ( $OpenProactiveTopProcessAlertsSinceReport.Count -lt 10 )
+			{
+			$TopProcessReport += $OpenProactiveTopProcessAlertsSinceReport | sort NetbiosComputerName | select NetbiosComputerName,TimeRaised | out-string
+			$TopProcessReport += ""
+			}
+		if ( $OpenProactiveTopProcessAlertsSinceReport.Count -ge 20 )
+			{
+			$TopProcessReport += "The number of OPEN Proactive TopProcess alerts is greater than 20"
+			$TopProcessReport += ""
+			$TopProcessReport += "# ADFS Service alert detail"
+			$TopProcessReport += "#==============================================="
+			$TopProcessReport += " Proactive TopProcess application alerts over 20 in since last report"
+			$TopProcessReport += "#==============================================="
+			$TopProcessReport += ""
+			}
+		}
+		
+	#$TopProcessReport += $OpenProactiveTopProcessAlertsSinceReport
+	$TopProcessReport += "#========================================================"
+	$TopProcessReport += ""
+	}
+	
+$TopProcessReport
+
+$TopProcessReport = $TopProcessReport | out-string
+
+
+# Log 
+$Summary = "$TopProcessReport `n `nDisclaimer:  This daily summary report is to document the alerts from OS performance issues from Security processes, and agent workflow/script alerts"
+
+if ( $ProactiveTopProcessAlerts.count -gt 0 )
+	{
+	$bag.AddValue('Count',$Test)
+	$bag.AddValue('Message',$DSMessage)
+	$bag.AddValue('Summary',$Summary)
+
+	$momapi.LogScriptEvent($ScriptName,$EventID,0,"$Summary")
+	}
+
+if ( $ProactiveTopProcessAlerts.count -eq 0 )
+	{
+	$Message += "ZERO Proactive TopProcess alerts for ($date)."
+	$momapi.LogScriptEvent($ScriptName,$EventID,0,"`nZERO Proactive TopProcess alerts for ($date).")
+	
+	$bag.AddValue('Count',$Test)
+	$bag.AddValue('Message',$DSMessage)
+	$bag.AddValue('Summary',$Summary)
+	}
+
+
+
+# Return all bags
+$bag
+
+
+# End of script section
+#=================================================================================
+#Log an event for script ending and total execution time.
+$EndTime = Get-Date
+$ScriptTime = ($EndTime - $StartTime).TotalSeconds
+$momapi.LogScriptEvent($ScriptName,$EventID,0,"`n Script Completed. `n Script Runtime: ($ScriptTime) seconds.")
+#=================================================================================
+# End of script
+                </ScriptBody>
+                <TimeoutSeconds>$Config/TimeoutSeconds$</TimeoutSeconds>
+              </ProbeAction>
+            </MemberModules>
+            <Composition>
+              <Node ID="PA">
+                <Node ID="Scheduler" />
+              </Node>
+            </Composition>
+          </Composite>
+        </ModuleImplementation>
+        <OutputType>System!System.PropertyBagData</OutputType>
+      </DataSourceModuleType>
+      <DataSourceModuleType ID="Proactive.TopProcess.Monitoring.Customizations.Script.DataSource" Accessibility="Internal" Batching="false">
+        <Configuration>
+		  <xsd:element minOccurs="1" type="xsd:integer" name="TimeoutSeconds" xmlns:xsd="http://www.w3.org/2001/XMLSchema" />	
+        </Configuration>
+        <OverrideableParameters>
+		  <OverrideableParameter ID="TimeoutSeconds" Selector="$Config/TimeoutSeconds$" ParameterType="int" />
+        </OverrideableParameters>
+        <ModuleImplementation Isolation="Any">
+          <Composite>
+            <MemberModules>
+              <DataSource ID="Scheduler" TypeID="System!System.Scheduler">
+                <Scheduler>
+                  <WeeklySchedule>
+                    <Windows>
+                      <Daily>
+                        <Start>06:12</Start>
+                        <End>06:32</End>
+                        <DaysOfWeekMask>62</DaysOfWeekMask>
+                      </Daily>
+                    </Windows>
+                  </WeeklySchedule>
+                  <ExcludeDates />
+                </Scheduler>
+              </DataSource>
+              <ProbeAction ID="PA" TypeID="Windows!Microsoft.Windows.PowerShellPropertyBagTriggerOnlyProbe">
+                 <ScriptName>Proactive.TopProcess.Monitoring.Customizations.Script.DS.v1014.ps1</ScriptName>
+                <ScriptBody>
+#=================================================================================
+#  Generic monitoring script to gather additional property bags for alert enrichment
+#
+# Kevin Justin
+# v1.0.2
+#=================================================================================
+#param ($ObjectName, $CounterName, $InstanceName, $SampleValue, $NumSamples)
+ 
+#=================================================================================
+# Constants section - modify stuff here:
+#=================================================================================
+# Assign script name variable for use in event logging 
+$ScriptName = "Proactive.TopProcess.Monitoring.Customizations.Script.DS.v1014.ps1"
+$EventID = "691"
+#=================================================================================
+
+ 
+# Gather the start time of the script
+$StartTime = Get-Date
+ 
+# Load MomScript API and PropertyBag function 
+$momapi = new-object -comObject 'MOM.ScriptAPI'
+$bag = $momapi.CreatePropertyBag()
+ 
+# Set variables to be used in logging events
+$whoami = whoami
+ 
+#Log script event that we are starting task
+$momapi.LogScriptEvent($ScriptName,100,0, "Starting monitor script.   Running as ($whoami)")
+ 
+ 
+#=================================================================================
+# Start Main section of script to gather additional data for alert description 
+# This example will gather the processes that are consuming the most CPU AND Memory
+#
+# Set variables to empty
+ 
+$date = get-date -uFormat "%Y-%m-%d"
+
+$DSMessage = "Proactive Top Process Monitoring diagnostic datasource for ($date)."
+
+
+$Processes = Get-Process | Sort CPU -Descending | Select -First 6 
+$CpuCores = (Get-WMIObject Win32_ComputerSystem).NumberOfLogicalProcessors
+ 
+# Top 5 process Memory Usage (MB)
+$processMemoryUsage = Get-WmiObject WIN32_PROCESS | Sort-Object -Property ws -Descending | Select-Object -first 6 processname, @{Name="MemUsage(MB)";Expression={[math]::round($_.ws / 1mb)}}
+ 
+ 
+$TopProcesses = @()
+ 
+Foreach ($Process in $Processes)
+{
+    $ProcID = $Process.ID
+	$W32Proc = Get-WmiObject Win32_Process -filter "ProcessID = $ProcID"
+          $ProcessCPU = (Get-Counter "\Process($($Process.ProcessName))\% processor time").CounterSamples
+	$ProcessWM = (Get-Counter "\Process($($Process.ProcessName))\Working Set").CounterSamples
+          $ProcessPM = (Get-Counter "\Process($($Process.ProcessName))\Private Bytes").CounterSamples
+ 
+    $SingleProc = [pscustomobject]@{
+        ProcessName = $Process.ProcessName
+        # Cores = $CpuCores
+       ProcessID = $Process.Id
+        #CPUValue = [math]::Round($ProcessCPU.CookedValue / $CpuCores,2)
+	CPUValue = [math]::Round($ProcessCPU.CookedValue,2)
+        MEMWorkingSet  = [math]::Round($ProcessWM.CookedValue  / 1Mb )
+        MEMPrivateBytes = [math]::Round($ProcessPM.CookedValue  / 1Mb )    
+           Owner = $W32Proc.GetOwner().User
+          CommandLine = $W32Proc.CommandLine
+
+       }
+    $TopProcesses += $SingleProc
+}
+ 
+# View Top CPU processes
+#$TopProcesses  | ft -AutoSize
+#$TopProcesses | sort -property CPUValue -desc  | ? { $_.CPUValue -ne $null } | ft ProcessID,CPUValue,MEMWorkingSet,MEMPrivateBytes,Owner,ProcessName,CommandLine -auto
+
+# $TopOutputCPU = $TopProcesses | sort -property CPUValue -desc  | ? { $_.CPUValue -ne $null } | ft ProcessID,CPUValue,MEMWorkingSet,MEMPrivateBytes,Owner,ProcessName,CommandLine -auto 
+$TopOutputCPU = $TopProcesses | sort -property CPUValue -desc  | ? { $_.CPUValue -ne $null } | ft ProcessID,CPUValue,MEMWorkingSet,MEMPrivateBytes,Owner,ProcessName -auto | out-string
+$TopOutputCPU
+
+
+#
+# Grab larger picture for multiple Security tools, ActivClient, SCCM/MECM, IIS (w3wp)
+ 
+$SecurityProcesses = Get-Process | ? { ($_.ProcessName -eq "AcEvents" ) `
+	-OR ($_.ProcessName -eq "CcmExec") `
+	-OR ($_.ProcessName -eq "CmRcService") `
+	-OR ($_.ProcessName -eq "MsMpEng") `
+	-OR ($_.ProcessName -like "Tanium*" ) `
+	-OR ($_.ProcessName -eq "Tychion" ) `
+	-OR ($_.ProcessName -eq "FireSvc" ) `
+	-OR ($_.ProcessName -eq "hbss" ) `
+	-OR ($_.ProcessName -like "Fcag*" ) `
+	-OR ($_.ProcessName -eq "HipMgmt" ) `
+	-OR ($_.ProcessName -eq "Macmnsvc") `
+	-OR ($_.ProcessName -eq "Macompatsvc") `
+	-OR ($_.ProcessName -eq "Masvc" ) `
+	-OR ($_.ProcessName -eq "McShield" ) `
+	-OR ($_.ProcessName -like "Mfe*" ) `
+	-OR ($_.ProcessName -like "Nessus*" ) `
+	-OR ($_.ProcessName -like "SolarWinds*" ) `
+	-OR ($_.ProcessName -like "Splunk*" ) `
+	-OR ($_.ProcessName -like "TPython*" ) `
+	-OR ($_.ProcessName -like "w3wp*" )
+	}
+
+# Debug
+#$SecurityProcesses 
+$SecurityProcesses | sort -property CPU -desc  | ? { $_.CPU -ne $null }
+ 
+#####################
+# Security process details
+#
+# Commented these out 
+#          $ProcessCPU = (Get-Counter "\Process($($Process.ProcessName))\% processor time").CounterSamples | select InstanceName,CookedValue
+	#$ProcessWM = (Get-Counter "\Process($($Process.ProcessName))\Working Set").CounterSamples | select InstanceName,CookedValue 
+#          $ProcessPM = (Get-Counter "\Process($($Process.ProcessName))\Private Bytes").CounterSamples | select InstanceName,CookedValue 
+ 
+# View Processes from Security tools/agents 
+# 
+# Uncomment, to view processes #$Processes
+$TopSecurityProcesses = @() 
+ 
+Foreach ($Process in $SecurityProcesses)
+{
+    $ProcID = $Process.ID
+	$W32Proc = Get-WmiObject Win32_Process -filter "ProcessID = $ProcID"
+          $ProcessCPU = (Get-Counter "\Process($($Process.ProcessName))\% processor time").CounterSamples
+	$ProcessWM = (Get-Counter "\Process($($Process.ProcessName))\Working Set").CounterSamples
+          $ProcessPM = (Get-Counter "\Process($($Process.ProcessName))\Private Bytes").CounterSamples
+ 
+    $SingleProc = [pscustomobject]@{
+        ProcessName = $Process.ProcessName
+        # Cores = $CpuCores
+       ProcessID = $Process.Id
+        #CPUValue = [math]::Round($ProcessCPU.CookedValue / $CpuCores,2)
+	CPUValue = [math]::Round($ProcessCPU.CookedValue,2)
+        MEMWorkingSet  = [math]::Round($ProcessWM.CookedValue  / 1Mb )
+        MEMPrivateBytes = [math]::Round($ProcessPM.CookedValue  / 1Mb ) 
+           Owner = $W32Proc.GetOwner().User
+          CommandLine = $W32Proc.CommandLine
+       }
+    $TopSecurityProcesses += $SingleProc
+}
+ 
+#$TopSecurityProcesses = $TopSecurityProcesses | ft -AutoSize
+ 
+#
+# Debug
+# Uncomment, to view top processes
+#$TopSecurityProcesses
+$TopSecurityProcesses | ft -auto
+
+# Top processes by CPU
+# $TopSecurityProcesses | sort -property CPUValue -desc| ft ProcessName,ProcessID,CPUValue -auto
+# Top processes by Memory debug
+#$TopSecurityProcesses | sort -property MEMWorkingSet -desc | ft ProcessName,ProcessID,MEMWorkingSet,MEMPrivateBytes,CPUValue,Owner -auto
+ 
+ 
+# May need to rethink this
+$Output = $TopProcesses | out-string
+ 
+# Log event for Top processes
+$momapi.LogScriptEvent($ScriptName,100,0,"`n Top Processes to include Security tools/agents. `n `n ($Output)")
+ 
+# Gather memory debug
+#Get-WmiObject WIN32_PROCESS | Sort-Object -Property ws -Descending | Select-Object -first 10 ProcessID,Name,WS
+ 
+# Get Computer Object
+$CompObject = Get-WmiObject -Class WIN32_OperatingSystem  
+$Memory = ((($CompObject.TotalVisibleMemorySize - $CompObject.FreePhysicalMemory)*100)/ $CompObject.TotalVisibleMemorySize)
+ 
+Write-Host "Memory usage in Percentage:" $Memory
+ 
+# Top 5 process Memory Usage (MB)
+# Moved to top
+#$processMemoryUsage = Get-WmiObject WIN32_PROCESS | Sort-Object -Property ws -Descending | Select-Object -first 6 processname, @{Name="MemUsage(MB)";Expression={[math]::round($_.ws / 1mb)}}
+ 
+# Process table debug
+$processMemoryUsage
+
+$processMemoryUsage = $processMemoryUsage | out-string
+ 
+ 
+# End main section of script to gather additional data for alert description
+#=================================================================================
+ 
+ 
+# Output Result = BAD to ensure our final condition detection will work.  This should be left alone
+$bag.AddValue("Result","BAD")
+ 
+# Output our standard performance data in propertybags to be able to add them to the alert description
+#$bag.AddValue("Object Name",$ObjectName)
+#$bag.AddValue("Counter Name",$CounterName)
+#$bag.AddValue("Instance Name",$InstanceName)
+#$bag.AddValue("Last Sampled Value",$SampleValue)
+#$bag.AddValue("Number of Samples",$NumSamples)
+ 
+# Output your custom propertybags you gather from the script
+#$bag.AddValue("Processes by CPU",$TopOutputCPU)
+#$bag.AddValue("Processes by Memory",$processMemoryUsage)
+
+# Log 
+$Summary = "$DSMessage`n$TopOutputCPU`n$processMemoryUsage`n `nDisclaimer:  This diagnostic output is to document top procesesses CPU/Memory, and the offending process/application"
+
+	$bag.AddValue('Count',$Test)
+	$bag.AddValue('Message',$DSMessage)
+	$bag.AddValue('Summary',$Summary)
+	
+
+# Output all bags
+$bag
+ 
+#Log an event for script ending and total execution time.
+$EndTime = Get-Date
+$ScriptTime = ($EndTime - $StartTime).TotalSeconds
+$momapi.LogScriptEvent($ScriptName,100,0,"Ending monitor script. Total runtime ($ScriptTime) seconds.")
+#=================================================================================
+# End of script
+                </ScriptBody>
+                <TimeoutSeconds>$Config/TimeoutSeconds$</TimeoutSeconds>
+              </ProbeAction>
+            </MemberModules>
+            <Composition>
+              <Node ID="PA">
+                <Node ID="Scheduler" />
+              </Node>
+            </Composition>
+          </Composite>
+        </ModuleImplementation>
+        <OutputType>System!System.PropertyBagData</OutputType>
+      </DataSourceModuleType>
+      <WriteActionModuleType ID="Proactive.TopProcess.Monitoring.Customizations.SummaryReport.Script.WA" Accessibility="Internal" Batching="false">
+        <Configuration>
+          <xsd:element minOccurs="1" name="TimeoutSeconds" type="xsd:integer" xmlns:xsd="http://www.w3.org/2001/XMLSchema" />
+        </Configuration>
+        <OverrideableParameters>
+          <OverrideableParameter ID="TimeoutSeconds" Selector="$Config/TimeoutSeconds$" ParameterType="int" />
+        </OverrideableParameters>
+        <ModuleImplementation Isolation="Any">
+          <Composite>
+            <MemberModules>
+              <WriteAction ID="PSWA" TypeID="Windows!Microsoft.Windows.PowerShellWriteAction">
+                <ScriptName>Proactive.TopProcess.Monitoring.Customizations.SummaryReport.Script.WA.v1014.ps1</ScriptName>
+                <ScriptBody>
+#=================================================================================
+#  Script to gather Proactive TopProcess alerts and close via on demand task
+#
+#  Author: Kevin Justin
+#  v1.0
+#=================================================================================
+
+
+# Constants section - modify stuff here:
+#=================================================================================
+# Assign script name variable for use in event logging.  
+# ScriptName should be the same as the ID of the module that the script is contained in
+$ScriptName = "Proactive.TopProcess.Monitoring.Customizations.SummaryReport.Script.WA.v1014.ps1"
+$EventID = "691"
+#=================================================================================
+
+
+# Starting Script section - All scripts get this
+#=================================================================================
+# Gather the start time of the script
+$StartTime = Get-Date
+#Set variable to be used in logging events
+$whoami = whoami
+# Load MOMScript API
+$momapi = New-Object -comObject MOM.ScriptAPI
+#Log script event that we are starting task
+$momapi.LogScriptEvent($ScriptName,$EventID,0,"`n Script is starting. `n Running as ($whoami).")
+#=================================================================================
+
+
+# PropertyBag Script section - Monitoring scripts get this
+#=================================================================================
+# Load SCOM PropertyBag function
+$bag = $momapi.CreatePropertyBag()
+#=================================================================================
+
+
+# Begin MAIN script section
+#=================================================================================
+
+#For a simple example - get files in Windows Temp:
+$date = get-date -uFormat "%Y-%m-%d"
+
+$momapi.LogScriptEvent($ScriptName,$EventID,0,"`n Gather Proactive TopProcess Services Alert report for date ($date).")
+
+$DSMessage = "Proactive DailyTasks Proactive TopProcess Alerts Summary Report for ($date)."
+
+
+# Grab past 24 hours
+if ( (get-date).DayOfWeek -ne "Monday" )
+	{
+	$Time = [DateTime](Get-Date).AddDays(-1)
+	}
+if ( (get-date).DayOfWeek -eq "Monday" )
+	{
+	$Time = [DateTime](Get-Date).AddDays(-3)
+	}
+
+
+#$ProactiveTopProcessAlerts = get-SCOMAlert -name "Proactive TopProcess*"
+$ProactiveTopProcessAlerts = get-scomalert | ?  { ( $_.Name -like "Proactive TopProcess *" ) `
+	} 
+	# | ? { $_.TimeRaised -ge $Time } 
+	
+$Test = $ProactiveTopProcessAlerts.Count
+
+
+# Open ADDS server alerts since last report
+$ProactiveTopProcessAlertsSinceReport = $ProactiveTopProcessAlerts | ? { $_.TimeRaised -gt $Time }
+$ProactiveTopProcessAlertsSinceReport
+$ProactiveTopProcessAlertsSinceReport.Count
+
+
+# Check for open alerts older than reporting period
+$OpenAlerts = $ProactiveTopProcessAlerts | ? { $_.ResolutionState -ne 255 } | ? { $_.TimeRaised -ge $Time }
+$OpenAlertDetail = $OpenAlerts | ft TimeRaised,NetbiosComputerName,Name -auto
+
+$OpenProactiveTopProcessAlertsSinceReport = $ProactiveTopProcessAlertsSinceReport | ? { $_.ResolutionState -ne 255 }
+$OpenProactiveTopProcessAlertsSinceReport.Count
+	
+# Alerts closed within report period $Time
+$ClosedAlerts = $ProactiveTopProcessAlerts | ? { $_.ResolutionState -eq 255 } | ? { $_.TimeRaised -ge $Time } 
+$ClosedAlertDetail = $ClosedAlerts | ft TimeRaised,NetbiosComputerName,Name -auto
+
+
+$Alerts = $ProactiveTopProcessAlerts | ft TimeRaised,NetbiosComputerName,Name -auto -wrap
+
+$AlertSorted = @()
+
+foreach ( $Name in $($ProactiveTopProcessAlerts.Name | sort -uniq) )
+	{
+	$AlertSorted += $Name
+	$AlertSorted +=	$ProactiveTopProcessAlerts | ? { $_.Name -eq $Name } | ft TimeRaised,NetbiosComputerName,Name -auto
+	$AlertSorted += "#====================================="
+	}
+
+$AlertSorted
+
+
+	
+# Build Report
+$TopProcessReport = @()
+
+if ( $ProactiveTopProcessAlerts.count -eq 0 )
+	{
+	$TopProcessReport += ""
+	$TopProcessReport += "ZERO Proactive TopProcess alerts for ($date)."
+	$TopProcessReport += ""
+	}
+
+if ( $ProactiveTopProcessAlerts.count -gt 0 )
+	{
+	$TopProcessReport += ""
+	$TopProcessReport += $DSMessage
+	$TopProcessReport += ""
+	$TopProcessReport += "#========================================================"
+	$TopProcessReport += "#"
+	$TopProcessReport += "# Total Proactive TopProcess alerts = $($ProactiveTopProcessAlerts.Count)"
+	$TopProcessReport += "#"
+	$TopProcessReport += "# OPEN alerts since last run = $($OpenProactiveTopProcessAlertsSinceReport.Count)"
+	$TopProcessReport += "# CLOSED alerts since last report run = $($ClosedAlerts.Count)"
+	$TopProcessReport += "#=================================================="
+	$TopProcessReport += "#"
+	$TopProcessReport += "# Total OPEN alerts"
+	$TopProcessReport += "#=================="
+	$TopProcessReport += "# Proactive TopProcess Service alerts = $($OpenAlerts.Count)"
+	$TopProcessReport += "#==============================================="
+	$TopProcessReport += "#"	
+	$TopProcessReport += "# Proactive TopProcess OPEN alert detail"
+	$TopProcessReport += "#========================================================"
+
+	if ( $OpenProactiveTopProcessAlertsSinceReport.Count -eq 0 )
+		{
+		$TopProcessReport += "ZERO OPEN Proactive TopProcess alerts servers for date ($date)."
+		$TopProcessReport += ""
+		}
+
+	if ( $OpenProactiveTopProcessAlertsSinceReport.Count -gt 0 )
+		{	
+		if ( $OpenProactiveTopProcessAlertsSinceReport.Count -lt 10 )
+			{
+			$TopProcessReport += $OpenProactiveTopProcessAlertsSinceReport | sort NetbiosComputerName | select NetbiosComputerName,TimeRaised | out-string
+			$TopProcessReport += ""
+			}
+		if ( $OpenProactiveTopProcessAlertsSinceReport.Count -ge 20 )
+			{
+			$TopProcessReport += "The number of OPEN Proactive TopProcess alerts is greater than 20"
+			$TopProcessReport += ""
+			$TopProcessReport += "# ADFS Service alert detail"
+			$TopProcessReport += "#==============================================="
+			$TopProcessReport += " Proactive TopProcess application alerts over 20 in since last report"
+			$TopProcessReport += "#==============================================="
+			$TopProcessReport += ""
+			}
+		}
+		
+	#$TopProcessReport += $OpenProactiveTopProcessAlertsSinceReport
+	$TopProcessReport += "#========================================================"
+	$TopProcessReport += ""
+	}
+	
+$TopProcessReport
+
+$TopProcessReport = $TopProcessReport | out-string
+
+
+# Log 
+$Summary = "$TopProcessReport `n `nDisclaimer:  This daily summary report is to document the alerts from OS performance issues from Security processes, and agent workflow/script alerts"
+
+if ( $ProactiveTopProcessAlerts.count -gt 0 )
+	{
+	$bag.AddValue('Count',$Test)
+	$bag.AddValue('Message',$DSMessage)
+	$bag.AddValue('Summary',$Summary)
+
+	$momapi.LogScriptEvent($ScriptName,$EventID,0,"$Summary")
+	}
+
+if ( $ProactiveTopProcessAlerts.count -eq 0 )
+	{
+	$Message += "ZERO Proactive TopProcess alerts for ($date)."
+	$momapi.LogScriptEvent($ScriptName,$EventID,0,"`nZERO Proactive TopProcess alerts for ($date).")
+	
+	$bag.AddValue('Count',$Test)
+	$bag.AddValue('Message',$DSMessage)
+	$bag.AddValue('Summary',$Summary)
+	}
+
+
+
+# Return all bags
+$bag
+
+
+# End of script section
+#=================================================================================
+#Log an event for script ending and total execution time.
+$EndTime = Get-Date
+$ScriptTime = ($EndTime - $StartTime).TotalSeconds
+$momapi.LogScriptEvent($ScriptName,$EventID,0,"`n Script Completed. `n Script Runtime: ($ScriptTime) seconds.")
+#=================================================================================
+# End of script
+                </ScriptBody>
+                <TimeoutSeconds>$Config/TimeoutSeconds$</TimeoutSeconds>
+              </WriteAction>
+            </MemberModules>
+            <Composition>
+              <Node ID="PSWA" />
+            </Composition>
+          </Composite>
+        </ModuleImplementation>
+        <OutputType>System!System.BaseData</OutputType>
+        <InputType>System!System.BaseData</InputType>
+      </WriteActionModuleType>
+      <WriteActionModuleType ID="Proactive.TopProcess.Monitoring.Diagnostic.Script.WA" Accessibility="Internal" Batching="false">
+        <Configuration>
+          <xsd:element minOccurs="1" name="TimeoutSeconds" type="xsd:integer" xmlns:xsd="http://www.w3.org/2001/XMLSchema" />
+        </Configuration>
+        <OverrideableParameters>
+          <OverrideableParameter ID="TimeoutSeconds" Selector="$Config/TimeoutSeconds$" ParameterType="int" />
+        </OverrideableParameters>
+        <ModuleImplementation Isolation="Any">
+          <Composite>
+            <MemberModules>
+              <WriteAction ID="PSWA" TypeID="Windows!Microsoft.Windows.PowerShellWriteAction">
+                <ScriptName>Proactive.TopProcess.Monitoring.Diagnostic.Script.WA.v1014.ps1</ScriptName>
+                <ScriptBody>
+#=================================================================================
+#  Script to gather Proactive.TopProcess.alerts and close via on demand task
+#
+#  Author: Kevin Justin
+#  v1.0
+#=================================================================================
+
+
+# Constants section - modify stuff here:
+#=================================================================================
+# Assign script name variable for use in event logging.  
+# ScriptName should be the same as the ID of the module that the script is contained in
+$ScriptName = "Proactive.TopProcess.Monitoring.Diagnostic.Script.WA.v1014.ps1"
+$EventID = "693"
+#=================================================================================
+
+
+# Starting Script section - All scripts get this
+#=================================================================================
+# Gather the start time of the script
+$StartTime = Get-Date
+#Set variable to be used in logging events
+$whoami = whoami
+# Load MOMScript API
+$momapi = New-Object -comObject MOM.ScriptAPI
+#Log script event that we are starting task
+$momapi.LogScriptEvent($ScriptName,$EventID,0,"`n Script is starting. `n Running as ($whoami).")
+#=================================================================================
+
+
+# PropertyBag Script section - Monitoring scripts get this
+#=================================================================================
+# Load SCOM PropertyBag function
+$bag = $momapi.CreatePropertyBag()
+#=================================================================================
+
+
+# Begin MAIN script section
+#=================================================================================
+#param ($ObjectName, $CounterName, $InstanceName, $SampleValue, $NumSamples)
+ 
+
+# Gather the start time of the script
+$StartTime = Get-Date
+ 
+# Load MomScript API and PropertyBag function 
+$momapi = new-object -comObject 'MOM.ScriptAPI'
+$bag = $momapi.CreatePropertyBag()
+ 
+# Set variables to be used in logging events
+$whoami = whoami
+ 
+#Log script event that we are starting task
+$momapi.LogScriptEvent($ScriptName,100,0, "Starting monitor script.   Running as ($whoami)")
+ 
+ 
+#=================================================================================
+# Start Main section of script to gather additional data for alert description 
+# This example will gather the processes that are consuming the most CPU AND Memory
+#
+# Set variables to empty
+ 
+$date = get-date -uFormat "%Y-%m-%d"
+
+$DSMessage = "Proactive Top Process Monitoring diagnostic for ($date)."
+
+
+$Processes = Get-Process | Sort CPU -Descending | Select -First 6 
+$CpuCores = (Get-WMIObject Win32_ComputerSystem).NumberOfLogicalProcessors
+ 
+# Top 5 process Memory Usage (MB)
+$processMemoryUsage = Get-WmiObject WIN32_PROCESS | Sort-Object -Property ws -Descending | Select-Object -first 6 processname, @{Name="MemUsage(MB)";Expression={[math]::round($_.ws / 1mb)}}
+ 
+ 
+$TopProcesses = @()
+ 
+Foreach ($Process in $Processes)
+{
+    $ProcID = $Process.ID
+	$W32Proc = Get-WmiObject Win32_Process -filter "ProcessID = $ProcID"
+          $ProcessCPU = (Get-Counter "\Process($($Process.ProcessName))\% processor time").CounterSamples
+	$ProcessWM = (Get-Counter "\Process($($Process.ProcessName))\Working Set").CounterSamples
+          $ProcessPM = (Get-Counter "\Process($($Process.ProcessName))\Private Bytes").CounterSamples
+ 
+    $SingleProc = [pscustomobject]@{
+        ProcessName = $Process.ProcessName
+        # Cores = $CpuCores
+       ProcessID = $Process.Id
+        #CPUValue = [math]::Round($ProcessCPU.CookedValue / $CpuCores,2)
+	CPUValue = [math]::Round($ProcessCPU.CookedValue,2)
+        MEMWorkingSet  = [math]::Round($ProcessWM.CookedValue  / 1Mb )
+        MEMPrivateBytes = [math]::Round($ProcessPM.CookedValue  / 1Mb )    
+           Owner = $W32Proc.GetOwner().User
+          CommandLine = $W32Proc.CommandLine
+
+       }
+    $TopProcesses += $SingleProc
+}
+ 
+# View Top CPU processes
+#$TopProcesses  | ft -AutoSize
+#$TopProcesses | sort -property CPUValue -desc  | ? { $_.CPUValue -ne $null } | ft ProcessID,CPUValue,MEMWorkingSet,MEMPrivateBytes,Owner,ProcessName,CommandLine -auto
+
+# $TopOutputCPU = $TopProcesses | sort -property CPUValue -desc  | ? { $_.CPUValue -ne $null } | ft ProcessID,CPUValue,MEMWorkingSet,MEMPrivateBytes,Owner,ProcessName,CommandLine -auto 
+$TopOutputCPU = $TopProcesses | sort -property CPUValue -desc  | ? { $_.CPUValue -ne $null } | ft ProcessID,CPUValue,MEMWorkingSet,MEMPrivateBytes,Owner,ProcessName -auto | out-string
+$TopOutputCPU
+
+
+#
+# Grab larger picture for multiple Security tools, ActivClient, SCCM/MECM, IIS (w3wp)
+ 
+$SecurityProcesses = Get-Process | ? { ($_.ProcessName -eq "AcEvents" ) `
+	-OR ($_.ProcessName -eq "CcmExec") `
+	-OR ($_.ProcessName -eq "CmRcService") `
+	-OR ($_.ProcessName -eq "MsMpEng") `
+	-OR ($_.ProcessName -like "Tanium*" ) `
+	-OR ($_.ProcessName -eq "Tychion" ) `
+	-OR ($_.ProcessName -eq "FireSvc" ) `
+	-OR ($_.ProcessName -eq "hbss" ) `
+	-OR ($_.ProcessName -like "Fcag*" ) `
+	-OR ($_.ProcessName -eq "HipMgmt" ) `
+	-OR ($_.ProcessName -eq "Macmnsvc") `
+	-OR ($_.ProcessName -eq "Macompatsvc") `
+	-OR ($_.ProcessName -eq "Masvc" ) `
+	-OR ($_.ProcessName -eq "McShield" ) `
+	-OR ($_.ProcessName -like "Mfe*" ) `
+	-OR ($_.ProcessName -like "Nessus*" ) `
+	-OR ($_.ProcessName -like "Splunk*" ) `
+	-OR ($_.ProcessName -like "SolarWinds*" ) `
+	-OR ($_.ProcessName -like "TPython*" ) `
+	-OR ($_.ProcessName -like "w3wp*" )
+	}
+
+# Debug
+#$SecurityProcesses 
+$SecurityProcesses | sort -property CPU -desc  | ? { $_.CPU -ne $null }
+ 
+#####################
+# Security process details
+#
+# Commented these out 
+#          $ProcessCPU = (Get-Counter "\Process($($Process.ProcessName))\% processor time").CounterSamples | select InstanceName,CookedValue
+	#$ProcessWM = (Get-Counter "\Process($($Process.ProcessName))\Working Set").CounterSamples | select InstanceName,CookedValue 
+#          $ProcessPM = (Get-Counter "\Process($($Process.ProcessName))\Private Bytes").CounterSamples | select InstanceName,CookedValue 
+ 
+# View Processes from Security tools/agents 
+# 
+# Uncomment, to view processes #$Processes
+$TopSecurityProcesses = @() 
+ 
+Foreach ($Process in $SecurityProcesses)
+{
+    $ProcID = $Process.ID
+	$W32Proc = Get-WmiObject Win32_Process -filter "ProcessID = $ProcID"
+          $ProcessCPU = (Get-Counter "\Process($($Process.ProcessName))\% processor time").CounterSamples
+	$ProcessWM = (Get-Counter "\Process($($Process.ProcessName))\Working Set").CounterSamples
+          $ProcessPM = (Get-Counter "\Process($($Process.ProcessName))\Private Bytes").CounterSamples
+ 
+    $SingleProc = [pscustomobject]@{
+        ProcessName = $Process.ProcessName
+        # Cores = $CpuCores
+       ProcessID = $Process.Id
+        #CPUValue = [math]::Round($ProcessCPU.CookedValue / $CpuCores,2)
+	CPUValue = [math]::Round($ProcessCPU.CookedValue,2)
+        MEMWorkingSet  = [math]::Round($ProcessWM.CookedValue  / 1Mb )
+        MEMPrivateBytes = [math]::Round($ProcessPM.CookedValue  / 1Mb ) 
+           Owner = $W32Proc.GetOwner().User
+          CommandLine = $W32Proc.CommandLine
+       }
+    $TopSecurityProcesses += $SingleProc
+}
+ 
+#$TopSecurityProcesses = $TopSecurityProcesses | ft -AutoSize
+ 
+#
+# Debug
+# Uncomment, to view top processes
+#$TopSecurityProcesses
+$TopSecurityProcesses | ft -auto
+
+# Top processes by CPU
+# $TopSecurityProcesses | sort -property CPUValue -desc| ft ProcessName,ProcessID,CPUValue -auto
+# Top processes by Memory debug
+#$TopSecurityProcesses | sort -property MEMWorkingSet -desc | ft ProcessName,ProcessID,MEMWorkingSet,MEMPrivateBytes,CPUValue,Owner -auto
+ 
+ 
+# May need to rethink this
+$Output = $TopProcesses | out-string
+ 
+# Log event for Top processes
+$momapi.LogScriptEvent($ScriptName,100,0,"`n Top Processes to include Security tools/agents. `n `n ($Output)")
+ 
+# Gather memory debug
+#Get-WmiObject WIN32_PROCESS | Sort-Object -Property ws -Descending | Select-Object -first 10 ProcessID,Name,WS
+ 
+# Get Computer Object
+$CompObject = Get-WmiObject -Class WIN32_OperatingSystem  
+$Memory = ((($CompObject.TotalVisibleMemorySize - $CompObject.FreePhysicalMemory)*100)/ $CompObject.TotalVisibleMemorySize)
+ 
+Write-Host "Memory usage in Percentage:" $Memory
+ 
+# Top 5 process Memory Usage (MB)
+# Moved to top
+#$processMemoryUsage = Get-WmiObject WIN32_PROCESS | Sort-Object -Property ws -Descending | Select-Object -first 6 processname, @{Name="MemUsage(MB)";Expression={[math]::round($_.ws / 1mb)}}
+ 
+# Process table debug
+$processMemoryUsage
+
+$processMemoryUsage = $processMemoryUsage | out-string
+ 
+ 
+# End main section of script to gather additional data for alert description
+#=================================================================================
+ 
+ 
+# Output Result = BAD to ensure our final condition detection will work.  This should be left alone
+$bag.AddValue("Result","BAD")
+ 
+# Output our standard performance data in propertybags to be able to add them to the alert description
+#$bag.AddValue("Object Name",$ObjectName)
+#$bag.AddValue("Counter Name",$CounterName)
+#$bag.AddValue("Instance Name",$InstanceName)
+#$bag.AddValue("Last Sampled Value",$SampleValue)
+#$bag.AddValue("Number of Samples",$NumSamples)
+ 
+# Output your custom propertybags you gather from the script
+#$bag.AddValue("Processes by CPU",$TopOutputCPU)
+#$bag.AddValue("Processes by Memory",$processMemoryUsage)
+
+# Log 
+$Summary = "$DSMessage`n$TopOutputCPU`n$processMemoryUsage`n `nDisclaimer:  This diagnostic output is to document top procesesses CPU/Memory, and the offending process/application"
+
+	$bag.AddValue('Count',$Test)
+	$bag.AddValue('Message',$DSMessage)
+	$bag.AddValue('Summary',$Summary)
+	
+
+# Output all bags
+$bag
+ 
+#Log an event for script ending and total execution time.
+$EndTime = Get-Date
+$ScriptTime = ($EndTime - $StartTime).TotalSeconds
+$momapi.LogScriptEvent($ScriptName,100,0,"Ending monitor script. Total runtime ($ScriptTime) seconds.")
+#=================================================================================
+# End of script
+                </ScriptBody>
+                <TimeoutSeconds>$Config/TimeoutSeconds$</TimeoutSeconds>
+              </WriteAction>
+            </MemberModules>
+            <Composition>
+              <Node ID="PSWA" />
+            </Composition>
+          </Composite>
+        </ModuleImplementation>
+        <OutputType>System!System.BaseData</OutputType>
+        <InputType>System!System.BaseData</InputType>
+      </WriteActionModuleType>
+    </ModuleTypes>
+  </TypeDefinitions>
+  <Monitoring>
+    <Rules>
+      <Rule ID="Proactive.TopProcess.Monitoring.Customizations.SummaryReport.Script.Alert.Rule" Enabled="true" Target="SC!Microsoft.SystemCenter.AllManagementServersPool" ConfirmDelivery="true" Remotable="true" Priority="Normal" DiscardLevel="100">
+        <Category>Alert</Category>
+        <DataSources>
+          <DataSource ID="DS" TypeID="Proactive.TopProcess.Monitoring.Customizations.SummaryReport.Script.DataSource">
+            <TimeoutSeconds>300</TimeoutSeconds>
+          </DataSource>
+        </DataSources>
+        <WriteActions>
+          <WriteAction ID="WA" TypeID="Health!System.Health.GenerateAlert">
+            <Priority>1</Priority>
+            <Severity>0</Severity>
+            <AlertMessageId>$MPElement[Name="Proactive.TopProcess.Monitoring.Customizations.SummaryReport.Script.Alert.Rule.AlertMessage"]$</AlertMessageId>
+            <AlertParameters>
+              <AlertParameter1>$Data/Property[@Name='Count']$</AlertParameter1>
+              <AlertParameter2>$Data/Property[@Name='Message']$</AlertParameter2>
+              <AlertParameter3>$Data/Property[@Name='Summary']$</AlertParameter3>
+            </AlertParameters>
+            <Suppression>
+              <SuppressionValue>$Data/Property[@Name='Message']$</SuppressionValue>
+            </Suppression>
+          </WriteAction>
+        </WriteActions>
+      </Rule>
+      <Rule ID="Proactive.TopProcess.Monitoring.Customizations.SummaryReport.Script.Task.Alert.Rule" Enabled="true" Target="SC!Microsoft.SystemCenter.AllManagementServersPool" ConfirmDelivery="true" Remotable="true" Priority="Normal" DiscardLevel="100">
+         <Category>Alert</Category>
+        <DataSources>
+          <DataSource ID="DS" TypeID="Windows!Microsoft.Windows.EventProvider">
+            <LogName>Operations Manager</LogName>
+            <Expression>
+              <And>
+                <Expression>
+                  <SimpleExpression>
+                    <ValueExpression>
+                      <XPathQuery Type="UnsignedInteger">EventDisplayNumber</XPathQuery>
+                    </ValueExpression>
+                    <Operator>Equal</Operator>
+                    <ValueExpression>
+                      <Value Type="UnsignedInteger">691</Value>
+                    </ValueExpression>
+                  </SimpleExpression>
+                </Expression>
+                <Expression>
+                  <SimpleExpression>
+                    <ValueExpression>
+                      <XPathQuery Type="String">PublisherName</XPathQuery>
+                    </ValueExpression>
+                    <Operator>Equal</Operator>
+                    <ValueExpression>
+                      <Value Type="String">Health Service Script</Value>
+                    </ValueExpression>
+                  </SimpleExpression>
+                </Expression>
+                <Expression>
+                  <RegExExpression>
+                    <ValueExpression>
+                      <XPathQuery Type="String">EventDescription</XPathQuery>
+                    </ValueExpression>
+                    <Operator>ContainsSubstring</Operator>
+                    <Pattern>Proactive DailyTasks Proactive TopProcess Alerts Summary Report for</Pattern>
+                  </RegExExpression>
+                </Expression>
+              </And>
+            </Expression>
+          </DataSource>
+        </DataSources>
+        <WriteActions>
+          <WriteAction ID="Alert" TypeID="Health!System.Health.GenerateAlert">
+            <Priority>1</Priority>
+            <Severity>0</Severity>
+            <AlertName />
+            <AlertDescription />
+            <AlertOwner />
+            <AlertMessageId>$MPElement[Name="Proactive.TopProcess.Monitoring.Customizations.SummaryReport.Script.Task.Alert.Rule.AlertMessage"]$</AlertMessageId>
+            <AlertParameters>
+              <AlertParameter1>$Data/EventDescription$</AlertParameter1>
+            </AlertParameters>
+            <Suppression />
+          </WriteAction>
+        </WriteActions>
+      </Rule>
+      <Rule ID="Proactive.TopProcess.Monitoring.Diagnostic.Script.Agent.Task.Alert.Rule" Enabled="true" Target="SC!Microsoft.SystemCenter.Agent" ConfirmDelivery="true" Remotable="true" Priority="Normal" DiscardLevel="100">
+         <Category>Alert</Category>
+        <DataSources>
+          <DataSource ID="DS" TypeID="Windows!Microsoft.Windows.EventProvider">
+            <LogName>Operations Manager</LogName>
+            <Expression>
+              <And>
+                <Expression>
+                  <SimpleExpression>
+                    <ValueExpression>
+                      <XPathQuery Type="UnsignedInteger">EventDisplayNumber</XPathQuery>
+                    </ValueExpression>
+                    <Operator>Equal</Operator>
+                    <ValueExpression>
+                      <Value Type="UnsignedInteger">693</Value>
+                    </ValueExpression>
+                  </SimpleExpression>
+                </Expression>
+                <Expression>
+                  <SimpleExpression>
+                    <ValueExpression>
+                      <XPathQuery Type="String">PublisherName</XPathQuery>
+                    </ValueExpression>
+                    <Operator>Equal</Operator>
+                    <ValueExpression>
+                      <Value Type="String">Health Service Script</Value>
+                    </ValueExpression>
+                  </SimpleExpression>
+                </Expression>
+                <Expression>
+                  <RegExExpression>
+                    <ValueExpression>
+                      <XPathQuery Type="String">EventDescription</XPathQuery>
+                    </ValueExpression>
+                    <Operator>ContainsSubstring</Operator>
+                    <Pattern>Proactive Top Process Monitoring diagnostic for</Pattern>
+                  </RegExExpression>
+                </Expression>
+              </And>
+            </Expression>
+          </DataSource>
+        </DataSources>
+        <WriteActions>
+          <WriteAction ID="Alert" TypeID="Health!System.Health.GenerateAlert">
+            <Priority>1</Priority>
+            <Severity>1</Severity>
+            <AlertName />
+            <AlertDescription />
+            <AlertOwner />
+            <AlertMessageId>$MPElement[Name="Proactive.TopProcess.Monitoring.Diagnostic.Script.Agent.Task.Alert.Rule.AlertMessage"]$</AlertMessageId>
+            <AlertParameters>
+              <AlertParameter1>$Data/EventDescription$</AlertParameter1>
+            </AlertParameters>
+            <Suppression />
+          </WriteAction>
+        </WriteActions>
+      </Rule>
+      <Rule ID="Proactive.TopProcess.Monitoring.Diagnostic.Script.OS.Task.Alert.Rule" Enabled="true" Target="Windows!Microsoft.Windows.Server.OperatingSystem" ConfirmDelivery="true" Remotable="true" Priority="Normal" DiscardLevel="100">
+         <Category>Alert</Category>
+        <DataSources>
+          <DataSource ID="DS" TypeID="Windows!Microsoft.Windows.EventProvider">
+            <LogName>Operations Manager</LogName>
+            <Expression>
+              <And>
+                <Expression>
+                  <SimpleExpression>
+                    <ValueExpression>
+                      <XPathQuery Type="UnsignedInteger">EventDisplayNumber</XPathQuery>
+                    </ValueExpression>
+                    <Operator>Equal</Operator>
+                    <ValueExpression>
+                      <Value Type="UnsignedInteger">693</Value>
+                    </ValueExpression>
+                  </SimpleExpression>
+                </Expression>
+                <Expression>
+                  <SimpleExpression>
+                    <ValueExpression>
+                      <XPathQuery Type="String">PublisherName</XPathQuery>
+                    </ValueExpression>
+                    <Operator>Equal</Operator>
+                    <ValueExpression>
+                      <Value Type="String">Health Service Script</Value>
+                    </ValueExpression>
+                  </SimpleExpression>
+                </Expression>
+                <Expression>
+                  <RegExExpression>
+                    <ValueExpression>
+                      <XPathQuery Type="String">EventDescription</XPathQuery>
+                    </ValueExpression>
+                    <Operator>ContainsSubstring</Operator>
+                    <Pattern>Proactive Top Process Monitoring diagnostic for</Pattern>
+                  </RegExExpression>
+                </Expression>
+              </And>
+            </Expression>
+          </DataSource>
+        </DataSources>
+        <WriteActions>
+          <WriteAction ID="Alert" TypeID="Health!System.Health.GenerateAlert">
+            <Priority>1</Priority>
+            <Severity>1</Severity>
+            <AlertName />
+            <AlertDescription />
+            <AlertOwner />
+            <AlertMessageId>$MPElement[Name="Proactive.TopProcess.Monitoring.Diagnostic.Script.OS.Task.Alert.Rule.AlertMessage"]$</AlertMessageId>
+            <AlertParameters>
+              <AlertParameter1>$Data/EventDescription$</AlertParameter1>
+            </AlertParameters>
+            <Suppression />
+          </WriteAction>
+        </WriteActions>
+      </Rule>
+      <Rule ID="Proactive.TopProcess.Monitoring.Diagnostic.Script.PA.Task.Alert.Rule" Enabled="true" Target="Windows!Microsoft.Windows.Server.OperatingSystem" ConfirmDelivery="true" Remotable="true" Priority="Normal" DiscardLevel="100">
+         <Category>Alert</Category>
+        <DataSources>
+          <DataSource ID="DS" TypeID="Windows!Microsoft.Windows.EventProvider">
+            <LogName>Operations Manager</LogName>
+            <Expression>
+              <And>
+                <Expression>
+                  <SimpleExpression>
+                    <ValueExpression>
+                      <XPathQuery Type="UnsignedInteger">EventDisplayNumber</XPathQuery>
+                    </ValueExpression>
+                    <Operator>Equal</Operator>
+                    <ValueExpression>
+                      <Value Type="UnsignedInteger">692</Value>
+                    </ValueExpression>
+                  </SimpleExpression>
+                </Expression>
+                <Expression>
+                  <SimpleExpression>
+                    <ValueExpression>
+                      <XPathQuery Type="String">PublisherName</XPathQuery>
+                    </ValueExpression>
+                    <Operator>Equal</Operator>
+                    <ValueExpression>
+                      <Value Type="String">Health Service Script</Value>
+                    </ValueExpression>
+                  </SimpleExpression>
+                </Expression>
+                <Expression>
+                  <RegExExpression>
+                    <ValueExpression>
+                      <XPathQuery Type="String">EventDescription</XPathQuery>
+                    </ValueExpression>
+                    <Operator>ContainsSubstring</Operator>
+                    <Pattern>Proactive Top Process Monitoring diagnostic ProbeAction for</Pattern>
+                  </RegExExpression>
+                </Expression>
+              </And>
+            </Expression>
+          </DataSource>
+        </DataSources>
+        <WriteActions>
+          <WriteAction ID="Alert" TypeID="Health!System.Health.GenerateAlert">
+            <Priority>1</Priority>
+            <Severity>1</Severity>
+            <AlertName />
+            <AlertDescription />
+            <AlertOwner />
+            <AlertMessageId>$MPElement[Name="Proactive.TopProcess.Monitoring.Diagnostic.Script.PA.Task.Alert.Rule.AlertMessage"]$</AlertMessageId>
+            <AlertParameters>
+              <AlertParameter1>$Data/EventDescription$</AlertParameter1>
+            </AlertParameters>
+            <Suppression />
+          </WriteAction>
+        </WriteActions>
+      </Rule>
+      <Rule ID="Proactive.TopProcess.Monitoring.Recovery.Script.Alert.Rule" Enabled="true" Target="Windows!Microsoft.Windows.Server.OperatingSystem" ConfirmDelivery="true" Remotable="true" Priority="Normal" DiscardLevel="100">
+         <Category>Alert</Category>
+        <DataSources>
+          <DataSource ID="DS" TypeID="Windows!Microsoft.Windows.EventProvider">
+            <LogName>Operations Manager</LogName>
+            <Expression>
+              <And>
+                <Expression>
+                  <SimpleExpression>
+                    <ValueExpression>
+                      <XPathQuery Type="UnsignedInteger">EventDisplayNumber</XPathQuery>
+                    </ValueExpression>
+                    <Operator>Equal</Operator>
+                    <ValueExpression>
+                      <Value Type="UnsignedInteger">693</Value>
+                    </ValueExpression>
+                  </SimpleExpression>
+                </Expression>
+                <Expression>
+                  <SimpleExpression>
+                    <ValueExpression>
+                      <XPathQuery Type="String">PublisherName</XPathQuery>
+                    </ValueExpression>
+                    <Operator>Equal</Operator>
+                    <ValueExpression>
+                      <Value Type="String">Health Service Script</Value>
+                    </ValueExpression>
+                  </SimpleExpression>
+                </Expression>
+                <Expression>
+                  <RegExExpression>
+                    <ValueExpression>
+                      <XPathQuery Type="String">EventDescription</XPathQuery>
+                    </ValueExpression>
+                    <Operator>ContainsSubstring</Operator>
+                    <Pattern>Proactive Top Process Monitoring recovery for</Pattern>
+                  </RegExExpression>
+                </Expression>
+              </And>
+            </Expression>
+          </DataSource>
+        </DataSources>
+        <WriteActions>
+          <WriteAction ID="Alert" TypeID="Health!System.Health.GenerateAlert">
+            <Priority>1</Priority>
+            <Severity>1</Severity>
+            <AlertName />
+            <AlertDescription />
+            <AlertOwner />
+            <AlertMessageId>$MPElement[Name="Proactive.TopProcess.Monitoring.Recovery.Script.Alert.Rule.AlertMessage"]$</AlertMessageId>
+            <AlertParameters>
+              <AlertParameter1>$Data/EventDescription$</AlertParameter1>
+            </AlertParameters>
+            <Suppression />
+          </WriteAction>
+        </WriteActions>
+      </Rule>
+	</Rules>
+    <Tasks>
+      <Task ID="Proactive.TopProcess.Monitoring.Customizations.SummaryReport.Script.Task" Accessibility="Public" Enabled="true" Target="SC!Microsoft.SystemCenter.AllManagementServersPool" Timeout="120" Remotable="true">
+        <Category>Custom</Category>
+        <WriteAction ID="PSWA" TypeID="Proactive.TopProcess.Monitoring.Customizations.SummaryReport.Script.WA">
+          <TimeoutSeconds>300</TimeoutSeconds>
+        </WriteAction>
+      </Task>
+      <Task ID="Proactive.TopProcess.Monitoring.Diagnostic.OS.Script.Task" Accessibility="Public" Enabled="true" Target="MWS6D!Microsoft.Windows.Server.10.0.OperatingSystem" Timeout="300" Remotable="true">
+        <Category>Custom</Category>
+        <WriteAction ID="PSWA" TypeID="Proactive.TopProcess.Monitoring.Diagnostic.Script.WA">
+          <TimeoutSeconds>300</TimeoutSeconds>
+        </WriteAction>
+      </Task>
+      <Task ID="Proactive.TopProcess.Monitoring.Diagnostic.Agent.Script.Task" Accessibility="Public" Enabled="true" Target="SC!Microsoft.SystemCenter.Agent" Timeout="300" Remotable="true">
+        <Category>Custom</Category>
+        <WriteAction ID="PSWA" TypeID="Proactive.TopProcess.Monitoring.Diagnostic.Script.WA">
+          <TimeoutSeconds>300</TimeoutSeconds>
+        </WriteAction>
+      </Task>
+    </Tasks>
+    <Recoveries>
+      <Recovery ID="Proactive.TopProcess.Monitoring.Script.AvailableMemory.Recovery" Accessibility="Public" Enabled="true" Target="MWS6D!Microsoft.Windows.Server.10.0.OperatingSystem" Monitor="MWS6M!Microsoft.Windows.Server.10.0.OperatingSystem.MemoryAvailableMBytes" ResetMonitor="true" ExecuteOnState="Error" Remotable="true" Timeout="300">
+        <Category>Custom</Category>
+		<WriteAction ID="PSWA" TypeID="Windows!Microsoft.Windows.PowerShellWriteAction">
+		  <ScriptName>Proactive.TopProcess.Monitoring.Script.AvailableMemory.Recovery.v1014.ps1</ScriptName>
+		  <ScriptBody>
+#=================================================================================
+#  Proactive TopProcess script for Available Memory recovery
+#
+#  Author:  Kevin Justin
+#  v1.0
+#=================================================================================
+
+
+# Constants section - modify stuff here:
+#=================================================================================
+# Assign script name variable for use in event logging.  
+# ScriptName should be the same as the ID of the module that the script is contained in
+$ScriptName = "Proactive.TopProcess.Monitoring.Script.AvailableMemory.Recovery.v1014.ps1"
+$EventID = "693"
+#=================================================================================
+
+
+# Starting Script section - All scripts get this
+#=================================================================================
+# Gather the start time of the script
+$StartTime = Get-Date
+#Set variable to be used in logging events
+$whoami = whoami
+# Load MOMScript API
+$momapi = New-Object -comObject MOM.ScriptAPI
+#Log script event that we are starting task
+$momapi.LogScriptEvent($ScriptName,$EventID,0,"`n Script is starting. `n Running as ($whoami).")
+#=================================================================================
+
+
+# PropertyBag Script section - Monitoring scripts get this
+#=================================================================================
+# Load SCOM PropertyBag function
+$bag = $momapi.CreatePropertyBag()
+#=================================================================================
+
+
+# Begin MAIN script section
+#=================================================================================
+#param ($ObjectName, $CounterName, $InstanceName, $SampleValue, $NumSamples)
+ 
+
+# Gather the start time of the script
+$StartTime = Get-Date
+ 
+# Load MomScript API and PropertyBag function 
+$momapi = new-object -comObject 'MOM.ScriptAPI'
+$bag = $momapi.CreatePropertyBag()
+ 
+# Set variables to be used in logging events
+$whoami = whoami
+ 
+#Log script event that we are starting task
+$momapi.LogScriptEvent($ScriptName,100,0, "Starting monitor script.   Running as ($whoami)")
+ 
+ 
+#=================================================================================
+# Start Main section of script to gather additional data for alert description 
+# This example will gather the processes that are consuming the most CPU AND Memory
+#
+# Set variables to empty
+ 
+$date = get-date -uFormat "%Y-%m-%d"
+
+$DSMessage = "Proactive Top Process Monitoring recovery for ($date)."
+
+
+$Processes = Get-Process | Sort CPU -Descending | Select -First 6 
+$CpuCores = (Get-WMIObject Win32_ComputerSystem).NumberOfLogicalProcessors
+ 
+# Top 5 process Memory Usage (MB)
+$processMemoryUsage = Get-WmiObject WIN32_PROCESS | Sort-Object -Property ws -Descending | Select-Object -first 6 processname, @{Name="MemUsage(MB)";Expression={[math]::round($_.ws / 1mb)}}
+ 
+ 
+$TopProcesses = @()
+ 
+Foreach ($Process in $Processes)
+{
+    $ProcID = $Process.ID
+	$W32Proc = Get-WmiObject Win32_Process -filter "ProcessID = $ProcID"
+          $ProcessCPU = (Get-Counter "\Process($($Process.ProcessName))\% processor time").CounterSamples
+	$ProcessWM = (Get-Counter "\Process($($Process.ProcessName))\Working Set").CounterSamples
+          $ProcessPM = (Get-Counter "\Process($($Process.ProcessName))\Private Bytes").CounterSamples
+ 
+    $SingleProc = [pscustomobject]@{
+        ProcessName = $Process.ProcessName
+        # Cores = $CpuCores
+       ProcessID = $Process.Id
+        #CPUValue = [math]::Round($ProcessCPU.CookedValue / $CpuCores,2)
+	CPUValue = [math]::Round($ProcessCPU.CookedValue,2)
+        MEMWorkingSet  = [math]::Round($ProcessWM.CookedValue  / 1Mb )
+        MEMPrivateBytes = [math]::Round($ProcessPM.CookedValue  / 1Mb )    
+           Owner = $W32Proc.GetOwner().User
+          CommandLine = $W32Proc.CommandLine
+
+       }
+    $TopProcesses += $SingleProc
+}
+ 
+# View Top CPU processes
+#$TopProcesses  | ft -AutoSize
+#$TopProcesses | sort -property CPUValue -desc  | ? { $_.CPUValue -ne $null } | ft ProcessID,CPUValue,MEMWorkingSet,MEMPrivateBytes,Owner,ProcessName,CommandLine -auto
+
+# $TopOutputCPU = $TopProcesses | sort -property CPUValue -desc  | ? { $_.CPUValue -ne $null } | ft ProcessID,CPUValue,MEMWorkingSet,MEMPrivateBytes,Owner,ProcessName,CommandLine -auto 
+$TopOutputCPU = $TopProcesses | sort -property CPUValue -desc  | ? { $_.CPUValue -ne $null } | ft ProcessID,CPUValue,MEMWorkingSet,MEMPrivateBytes,Owner,ProcessName -auto | out-string
+$TopOutputCPU
+
+
+#
+# Grab larger picture for multiple Security tools, ActivClient, SCCM/MECM, IIS (w3wp)
+ 
+$SecurityProcesses = Get-Process | ? { ($_.ProcessName -eq "AcEvents" ) `
+	-OR ($_.ProcessName -eq "CcmExec") `
+	-OR ($_.ProcessName -eq "CmRcService") `
+	-OR ($_.ProcessName -eq "MsMpEng") `
+	-OR ($_.ProcessName -like "Tanium*" ) `
+	-OR ($_.ProcessName -eq "Tychion" ) `
+	-OR ($_.ProcessName -eq "FireSvc" ) `
+	-OR ($_.ProcessName -eq "hbss" ) `
+	-OR ($_.ProcessName -like "Fcag*" ) `
+	-OR ($_.ProcessName -eq "HipMgmt" ) `
+	-OR ($_.ProcessName -eq "Macmnsvc") `
+	-OR ($_.ProcessName -eq "Macompatsvc") `
+	-OR ($_.ProcessName -eq "Masvc" ) `
+	-OR ($_.ProcessName -eq "McShield" ) `
+	-OR ($_.ProcessName -like "Mfe*" ) `
+	-OR ($_.ProcessName -like "Nessus*" ) `
+	-OR ($_.ProcessName -like "Splunk*" ) `
+	-OR ($_.ProcessName -like "SolarWinds*" ) `
+	-OR ($_.ProcessName -like "TPython*" ) `
+	-OR ($_.ProcessName -like "w3wp*" )
+	}
+
+# Debug
+#$SecurityProcesses 
+$SecurityProcesses | sort -property CPU -desc  | ? { $_.CPU -ne $null }
+ 
+#####################
+# Security process details
+#
+# Commented these out 
+#          $ProcessCPU = (Get-Counter "\Process($($Process.ProcessName))\% processor time").CounterSamples | select InstanceName,CookedValue
+	#$ProcessWM = (Get-Counter "\Process($($Process.ProcessName))\Working Set").CounterSamples | select InstanceName,CookedValue 
+#          $ProcessPM = (Get-Counter "\Process($($Process.ProcessName))\Private Bytes").CounterSamples | select InstanceName,CookedValue 
+ 
+# View Processes from Security tools/agents 
+# 
+# Uncomment, to view processes #$Processes
+$TopSecurityProcesses = @() 
+ 
+Foreach ($Process in $SecurityProcesses)
+{
+    $ProcID = $Process.ID
+	$W32Proc = Get-WmiObject Win32_Process -filter "ProcessID = $ProcID"
+          $ProcessCPU = (Get-Counter "\Process($($Process.ProcessName))\% processor time").CounterSamples
+	$ProcessWM = (Get-Counter "\Process($($Process.ProcessName))\Working Set").CounterSamples
+          $ProcessPM = (Get-Counter "\Process($($Process.ProcessName))\Private Bytes").CounterSamples
+ 
+    $SingleProc = [pscustomobject]@{
+        ProcessName = $Process.ProcessName
+        # Cores = $CpuCores
+       ProcessID = $Process.Id
+        #CPUValue = [math]::Round($ProcessCPU.CookedValue / $CpuCores,2)
+	CPUValue = [math]::Round($ProcessCPU.CookedValue,2)
+        MEMWorkingSet  = [math]::Round($ProcessWM.CookedValue  / 1Mb )
+        MEMPrivateBytes = [math]::Round($ProcessPM.CookedValue  / 1Mb ) 
+           Owner = $W32Proc.GetOwner().User
+          CommandLine = $W32Proc.CommandLine
+       }
+    $TopSecurityProcesses += $SingleProc
+}
+ 
+#$TopSecurityProcesses = $TopSecurityProcesses | ft -AutoSize
+ 
+#
+# Debug
+# Uncomment, to view top processes
+#$TopSecurityProcesses
+$TopSecurityProcesses | ft -auto
+
+# Top processes by CPU
+# $TopSecurityProcesses | sort -property CPUValue -desc| ft ProcessName,ProcessID,CPUValue -auto
+# Top processes by Memory debug
+#$TopSecurityProcesses | sort -property MEMWorkingSet -desc | ft ProcessName,ProcessID,MEMWorkingSet,MEMPrivateBytes,CPUValue,Owner -auto
+ 
+ 
+# May need to rethink this
+$Output = $TopProcesses | out-string
+ 
+# Log event for Top processes
+$momapi.LogScriptEvent($ScriptName,100,0,"`n Top Processes to include Security tools/agents. `n `n ($Output)")
+ 
+# Gather memory debug
+#Get-WmiObject WIN32_PROCESS | Sort-Object -Property ws -Descending | Select-Object -first 10 ProcessID,Name,WS
+ 
+# Get Computer Object
+$CompObject = Get-WmiObject -Class WIN32_OperatingSystem  
+$Memory = ((($CompObject.TotalVisibleMemorySize - $CompObject.FreePhysicalMemory)*100)/ $CompObject.TotalVisibleMemorySize)
+ 
+Write-Host "Memory usage in Percentage:" $Memory
+ 
+# Top 5 process Memory Usage (MB)
+# Moved to top
+#$processMemoryUsage = Get-WmiObject WIN32_PROCESS | Sort-Object -Property ws -Descending | Select-Object -first 6 processname, @{Name="MemUsage(MB)";Expression={[math]::round($_.ws / 1mb)}}
+ 
+# Process table debug
+$processMemoryUsage
+
+$processMemoryUsage = $processMemoryUsage | out-string
+ 
+ 
+# End main section of script to gather additional data for alert description
+#=================================================================================
+ 
+ 
+# Output Result = BAD to ensure our final condition detection will work.  This should be left alone
+$bag.AddValue("Result","BAD")
+ 
+# Output our standard performance data in propertybags to be able to add them to the alert description
+#$bag.AddValue("Object Name",$ObjectName)
+#$bag.AddValue("Counter Name",$CounterName)
+#$bag.AddValue("Instance Name",$InstanceName)
+#$bag.AddValue("Last Sampled Value",$SampleValue)
+#$bag.AddValue("Number of Samples",$NumSamples)
+ 
+# Output your custom propertybags you gather from the script
+#$bag.AddValue("Processes by CPU",$TopOutputCPU)
+#$bag.AddValue("Processes by Memory",$processMemoryUsage)
+
+# Log 
+$Summary = "$DSMessage`n$TopOutputCPU`n$processMemoryUsage`n `nDisclaimer:  This diagnostic output is to document top procesesses CPU/Memory, and the offending process/application"
+
+	$bag.AddValue('Count',$Test)
+	$bag.AddValue('Message',$DSMessage)
+	$bag.AddValue('Summary',$Summary)
+	
+
+# Output all bags
+$bag
+ 
+#Log an event for script ending and total execution time.
+$EndTime = Get-Date
+$ScriptTime = ($EndTime - $StartTime).TotalSeconds
+$momapi.LogScriptEvent($ScriptName,100,0,"Ending monitor script. Total runtime ($ScriptTime) seconds.")
+#=================================================================================
+# End of script
+		  </ScriptBody>
+		  <TimeoutSeconds>360</TimeoutSeconds>
+		</WriteAction>
+      </Recovery>
+      <Recovery ID="Proactive.TopProcess.Monitoring.Script.CPU.Recovery" Accessibility="Public" Enabled="true" Target="MWS6D!Microsoft.Windows.Server.10.0.OperatingSystem" Monitor="MWS6M!Microsoft.Windows.Server.10.0.OperatingSystem.TotalCPUUtilization" ResetMonitor="true" ExecuteOnState="Error" Remotable="true" Timeout="300">
+        <Category>Custom</Category>
+		<WriteAction ID="PSWA" TypeID="Windows!Microsoft.Windows.PowerShellWriteAction">
+		  <ScriptName>Proactive.TopProcess.Monitoring.Script.CPU.Recovery.v1014.ps1</ScriptName>
+		  <ScriptBody>
+#=================================================================================
+#  Proactive TopProcess script for CPU recovery
+#
+#  Author:  Kevin Justin
+#  v1.0
+#=================================================================================
+
+
+# Constants section - modify stuff here:
+#=================================================================================
+# Assign script name variable for use in event logging.  
+# ScriptName should be the same as the ID of the module that the script is contained in
+$ScriptName = "Proactive.TopProcess.Monitoring.Script.CPU.Recovery.v1014.ps1"
+$EventID = "693"
+#=================================================================================
+
+
+# Starting Script section - All scripts get this
+#=================================================================================
+# Gather the start time of the script
+$StartTime = Get-Date
+#Set variable to be used in logging events
+$whoami = whoami
+# Load MOMScript API
+$momapi = New-Object -comObject MOM.ScriptAPI
+#Log script event that we are starting task
+$momapi.LogScriptEvent($ScriptName,$EventID,0,"`n Script is starting. `n Running as ($whoami).")
+#=================================================================================
+
+
+# PropertyBag Script section - Monitoring scripts get this
+#=================================================================================
+# Load SCOM PropertyBag function
+$bag = $momapi.CreatePropertyBag()
+#=================================================================================
+
+
+# Begin MAIN script section
+#=================================================================================
+#param ($ObjectName, $CounterName, $InstanceName, $SampleValue, $NumSamples)
+ 
+
+# Gather the start time of the script
+$StartTime = Get-Date
+ 
+# Load MomScript API and PropertyBag function 
+$momapi = new-object -comObject 'MOM.ScriptAPI'
+$bag = $momapi.CreatePropertyBag()
+ 
+# Set variables to be used in logging events
+$whoami = whoami
+ 
+#Log script event that we are starting task
+$momapi.LogScriptEvent($ScriptName,100,0, "Starting monitor script.   Running as ($whoami)")
+ 
+ 
+#=================================================================================
+# Start Main section of script to gather additional data for alert description 
+# This example will gather the processes that are consuming the most CPU AND Memory
+#
+# Set variables to empty
+ 
+$date = get-date -uFormat "%Y-%m-%d"
+
+#Proactive.TopProcess.Monitoring.Script.ATQ.Recovery
+$DSMessage = "Proactive Top Process Monitoring recovery for CPU on ($date)."
+
+
+$Processes = Get-Process | Sort CPU -Descending | Select -First 6 
+$CpuCores = (Get-WMIObject Win32_ComputerSystem).NumberOfLogicalProcessors
+ 
+# Top 5 process Memory Usage (MB)
+$processMemoryUsage = Get-WmiObject WIN32_PROCESS | Sort-Object -Property ws -Descending | Select-Object -first 6 processname, @{Name="MemUsage(MB)";Expression={[math]::round($_.ws / 1mb)}}
+ 
+ 
+$TopProcesses = @()
+ 
+Foreach ($Process in $Processes)
+{
+    $ProcID = $Process.ID
+	$W32Proc = Get-WmiObject Win32_Process -filter "ProcessID = $ProcID"
+          $ProcessCPU = (Get-Counter "\Process($($Process.ProcessName))\% processor time").CounterSamples
+	$ProcessWM = (Get-Counter "\Process($($Process.ProcessName))\Working Set").CounterSamples
+          $ProcessPM = (Get-Counter "\Process($($Process.ProcessName))\Private Bytes").CounterSamples
+ 
+    $SingleProc = [pscustomobject]@{
+        ProcessName = $Process.ProcessName
+        # Cores = $CpuCores
+       ProcessID = $Process.Id
+        #CPUValue = [math]::Round($ProcessCPU.CookedValue / $CpuCores,2)
+	CPUValue = [math]::Round($ProcessCPU.CookedValue,2)
+        MEMWorkingSet  = [math]::Round($ProcessWM.CookedValue  / 1Mb )
+        MEMPrivateBytes = [math]::Round($ProcessPM.CookedValue  / 1Mb )    
+           Owner = $W32Proc.GetOwner().User
+          CommandLine = $W32Proc.CommandLine
+
+       }
+    $TopProcesses += $SingleProc
+}
+ 
+# View Top CPU processes
+#$TopProcesses  | ft -AutoSize
+#$TopProcesses | sort -property CPUValue -desc  | ? { $_.CPUValue -ne $null } | ft ProcessID,CPUValue,MEMWorkingSet,MEMPrivateBytes,Owner,ProcessName,CommandLine -auto
+
+# $TopOutputCPU = $TopProcesses | sort -property CPUValue -desc  | ? { $_.CPUValue -ne $null } | ft ProcessID,CPUValue,MEMWorkingSet,MEMPrivateBytes,Owner,ProcessName,CommandLine -auto 
+$TopOutputCPU = $TopProcesses | sort -property CPUValue -desc  | ? { $_.CPUValue -ne $null } | ft ProcessID,CPUValue,MEMWorkingSet,MEMPrivateBytes,Owner,ProcessName -auto | out-string
+$TopOutputCPU
+
+
+#
+# Grab larger picture for multiple Security tools, ActivClient, SCCM/MECM, IIS (w3wp)
+ 
+$SecurityProcesses = Get-Process | ? { ($_.ProcessName -eq "AcEvents" ) `
+	-OR ($_.ProcessName -eq "CcmExec") `
+	-OR ($_.ProcessName -eq "CmRcService") `
+	-OR ($_.ProcessName -eq "MsMpEng") `
+	-OR ($_.ProcessName -like "Tanium*" ) `
+	-OR ($_.ProcessName -eq "Tychion" ) `
+	-OR ($_.ProcessName -eq "FireSvc" ) `
+	-OR ($_.ProcessName -eq "hbss" ) `
+	-OR ($_.ProcessName -like "Fcag*" ) `
+	-OR ($_.ProcessName -eq "HipMgmt" ) `
+	-OR ($_.ProcessName -eq "Macmnsvc") `
+	-OR ($_.ProcessName -eq "Macompatsvc") `
+	-OR ($_.ProcessName -eq "Masvc" ) `
+	-OR ($_.ProcessName -eq "McShield" ) `
+	-OR ($_.ProcessName -like "Mfe*" ) `
+	-OR ($_.ProcessName -like "Nessus*" ) `
+	-OR ($_.ProcessName -like "Splunk*" ) `
+	-OR ($_.ProcessName -like "SolarWinds*" ) `
+	-OR ($_.ProcessName -like "TPython*" ) `
+	-OR ($_.ProcessName -like "w3wp*" )
+	}
+
+# Debug
+#$SecurityProcesses 
+$SecurityProcesses | sort -property CPU -desc  | ? { $_.CPU -ne $null }
+ 
+#####################
+# Security process details
+#
+# Commented these out 
+#          $ProcessCPU = (Get-Counter "\Process($($Process.ProcessName))\% processor time").CounterSamples | select InstanceName,CookedValue
+	#$ProcessWM = (Get-Counter "\Process($($Process.ProcessName))\Working Set").CounterSamples | select InstanceName,CookedValue 
+#          $ProcessPM = (Get-Counter "\Process($($Process.ProcessName))\Private Bytes").CounterSamples | select InstanceName,CookedValue 
+ 
+# View Processes from Security tools/agents 
+# 
+# Uncomment, to view processes #$Processes
+$TopSecurityProcesses = @() 
+ 
+Foreach ($Process in $SecurityProcesses)
+{
+    $ProcID = $Process.ID
+	$W32Proc = Get-WmiObject Win32_Process -filter "ProcessID = $ProcID"
+          $ProcessCPU = (Get-Counter "\Process($($Process.ProcessName))\% processor time").CounterSamples
+	$ProcessWM = (Get-Counter "\Process($($Process.ProcessName))\Working Set").CounterSamples
+          $ProcessPM = (Get-Counter "\Process($($Process.ProcessName))\Private Bytes").CounterSamples
+ 
+    $SingleProc = [pscustomobject]@{
+        ProcessName = $Process.ProcessName
+        # Cores = $CpuCores
+       ProcessID = $Process.Id
+        #CPUValue = [math]::Round($ProcessCPU.CookedValue / $CpuCores,2)
+	CPUValue = [math]::Round($ProcessCPU.CookedValue,2)
+        MEMWorkingSet  = [math]::Round($ProcessWM.CookedValue  / 1Mb )
+        MEMPrivateBytes = [math]::Round($ProcessPM.CookedValue  / 1Mb ) 
+           Owner = $W32Proc.GetOwner().User
+          CommandLine = $W32Proc.CommandLine
+       }
+    $TopSecurityProcesses += $SingleProc
+}
+ 
+#$TopSecurityProcesses = $TopSecurityProcesses | ft -AutoSize
+ 
+#
+# Debug
+# Uncomment, to view top processes
+#$TopSecurityProcesses
+$TopSecurityProcesses | ft -auto
+
+# Top processes by CPU
+# $TopSecurityProcesses | sort -property CPUValue -desc| ft ProcessName,ProcessID,CPUValue -auto
+# Top processes by Memory debug
+#$TopSecurityProcesses | sort -property MEMWorkingSet -desc | ft ProcessName,ProcessID,MEMWorkingSet,MEMPrivateBytes,CPUValue,Owner -auto
+ 
+ 
+# May need to rethink this
+$Output = $TopProcesses | out-string
+ 
+# Log event for Top processes
+$momapi.LogScriptEvent($ScriptName,100,0,"`n Top Processes to include Security tools/agents. `n `n ($Output)")
+ 
+# Gather memory debug
+#Get-WmiObject WIN32_PROCESS | Sort-Object -Property ws -Descending | Select-Object -first 10 ProcessID,Name,WS
+ 
+# Get Computer Object
+$CompObject = Get-WmiObject -Class WIN32_OperatingSystem  
+$Memory = ((($CompObject.TotalVisibleMemorySize - $CompObject.FreePhysicalMemory)*100)/ $CompObject.TotalVisibleMemorySize)
+ 
+Write-Host "Memory usage in Percentage:" $Memory
+ 
+# Top 5 process Memory Usage (MB)
+# Moved to top
+#$processMemoryUsage = Get-WmiObject WIN32_PROCESS | Sort-Object -Property ws -Descending | Select-Object -first 6 processname, @{Name="MemUsage(MB)";Expression={[math]::round($_.ws / 1mb)}}
+ 
+# Process table debug
+$processMemoryUsage
+
+$processMemoryUsage = $processMemoryUsage | out-string
+ 
+ 
+# End main section of script to gather additional data for alert description
+#=================================================================================
+ 
+ 
+# Output Result = BAD to ensure our final condition detection will work.  This should be left alone
+$bag.AddValue("Result","BAD")
+ 
+# Output our standard performance data in propertybags to be able to add them to the alert description
+#$bag.AddValue("Object Name",$ObjectName)
+#$bag.AddValue("Counter Name",$CounterName)
+#$bag.AddValue("Instance Name",$InstanceName)
+#$bag.AddValue("Last Sampled Value",$SampleValue)
+#$bag.AddValue("Number of Samples",$NumSamples)
+ 
+# Output your custom propertybags you gather from the script
+#$bag.AddValue("Processes by CPU",$TopOutputCPU)
+#$bag.AddValue("Processes by Memory",$processMemoryUsage)
+
+# Log 
+$Summary = "$DSMessage`n$TopOutputCPU`n$processMemoryUsage`n `nDisclaimer:  This diagnostic output is to document top procesesses CPU/Memory, and the offending process/application"
+
+	$bag.AddValue('Count',$Test)
+	$bag.AddValue('Message',$DSMessage)
+	$bag.AddValue('Summary',$Summary)
+	
+
+# Output all bags
+$bag
+ 
+#Log an event for script ending and total execution time.
+$EndTime = Get-Date
+$ScriptTime = ($EndTime - $StartTime).TotalSeconds
+$momapi.LogScriptEvent($ScriptName,100,0,"Ending monitor script. Total runtime ($ScriptTime) seconds.")
+#=================================================================================
+# End of script
+		  </ScriptBody>
+		  <TimeoutSeconds>360</TimeoutSeconds>
+		</WriteAction>
+      </Recovery>
+      <Recovery ID="Proactive.TopProcess.Monitoring.Script.MaxConcurrent.Recovery" Accessibility="Public" Enabled="true" Target="MWS6D!Microsoft.Windows.Server.10.0.OperatingSystem" Monitor="MWS6M!Microsoft.Windows.Server.10.0.MaxConcurrentAPI.Monitor" ResetMonitor="true" ExecuteOnState="Error" Remotable="true" Timeout="300">
+        <Category>Custom</Category>
+		<WriteAction ID="PSWA" TypeID="Windows!Microsoft.Windows.PowerShellWriteAction">
+		  <ScriptName>Proactive.TopProcess.Monitoring.Script.MaxConcurrent.Recovery.v1014.ps1</ScriptName>
+		  <ScriptBody>
+#=================================================================================
+#  Proactive TopProcess script for CPU recovery
+#
+#  Author:  Kevin Justin
+#  v1.0
+#=================================================================================
+
+
+# Constants section - modify stuff here:
+#=================================================================================
+# Assign script name variable for use in event logging.  
+# ScriptName should be the same as the ID of the module that the script is contained in
+$ScriptName = "Proactive.TopProcess.Monitoring.Script.MaxConcurrent.Recovery.v1014.ps1"
+$EventID = "693"
+#=================================================================================
+
+
+# Starting Script section - All scripts get this
+#=================================================================================
+# Gather the start time of the script
+$StartTime = Get-Date
+#Set variable to be used in logging events
+$whoami = whoami
+# Load MOMScript API
+$momapi = New-Object -comObject MOM.ScriptAPI
+#Log script event that we are starting task
+$momapi.LogScriptEvent($ScriptName,$EventID,0,"`n Script is starting. `n Running as ($whoami).")
+#=================================================================================
+
+
+# PropertyBag Script section - Monitoring scripts get this
+#=================================================================================
+# Load SCOM PropertyBag function
+$bag = $momapi.CreatePropertyBag()
+#=================================================================================
+
+
+# Begin MAIN script section
+#=================================================================================
+#param ($ObjectName, $CounterName, $InstanceName, $SampleValue, $NumSamples)
+ 
+
+# Gather the start time of the script
+$StartTime = Get-Date
+ 
+# Load MomScript API and PropertyBag function 
+$momapi = new-object -comObject 'MOM.ScriptAPI'
+$bag = $momapi.CreatePropertyBag()
+ 
+# Set variables to be used in logging events
+$whoami = whoami
+ 
+#Log script event that we are starting task
+$momapi.LogScriptEvent($ScriptName,100,0, "Starting monitor script.   Running as ($whoami)")
+ 
+ 
+#=================================================================================
+# Start Main section of script to gather additional data for alert description 
+# This example will gather the processes that are consuming the most CPU AND Memory
+#
+# Set variables to empty
+ 
+$date = get-date -uFormat "%Y-%m-%d"
+
+#Proactive.TopProcess.Monitoring.Script.ATQ.Recovery
+$DSMessage = "Proactive Top Process Monitoring recovery for MaxConcurrentAPI on ($date)."
+
+
+$Processes = Get-Process | Sort CPU -Descending | Select -First 6 
+$CpuCores = (Get-WMIObject Win32_ComputerSystem).NumberOfLogicalProcessors
+ 
+# Top 5 process Memory Usage (MB)
+$processMemoryUsage = Get-WmiObject WIN32_PROCESS | Sort-Object -Property ws -Descending | Select-Object -first 6 processname, @{Name="MemUsage(MB)";Expression={[math]::round($_.ws / 1mb)}}
+ 
+ 
+$TopProcesses = @()
+ 
+Foreach ($Process in $Processes)
+{
+    $ProcID = $Process.ID
+	$W32Proc = Get-WmiObject Win32_Process -filter "ProcessID = $ProcID"
+          $ProcessCPU = (Get-Counter "\Process($($Process.ProcessName))\% processor time").CounterSamples
+	$ProcessWM = (Get-Counter "\Process($($Process.ProcessName))\Working Set").CounterSamples
+          $ProcessPM = (Get-Counter "\Process($($Process.ProcessName))\Private Bytes").CounterSamples
+ 
+    $SingleProc = [pscustomobject]@{
+        ProcessName = $Process.ProcessName
+        # Cores = $CpuCores
+       ProcessID = $Process.Id
+        #CPUValue = [math]::Round($ProcessCPU.CookedValue / $CpuCores,2)
+	CPUValue = [math]::Round($ProcessCPU.CookedValue,2)
+        MEMWorkingSet  = [math]::Round($ProcessWM.CookedValue  / 1Mb )
+        MEMPrivateBytes = [math]::Round($ProcessPM.CookedValue  / 1Mb )    
+           Owner = $W32Proc.GetOwner().User
+          CommandLine = $W32Proc.CommandLine
+
+       }
+    $TopProcesses += $SingleProc
+}
+ 
+# View Top CPU processes
+#$TopProcesses  | ft -AutoSize
+#$TopProcesses | sort -property CPUValue -desc  | ? { $_.CPUValue -ne $null } | ft ProcessID,CPUValue,MEMWorkingSet,MEMPrivateBytes,Owner,ProcessName,CommandLine -auto
+
+# $TopOutputCPU = $TopProcesses | sort -property CPUValue -desc  | ? { $_.CPUValue -ne $null } | ft ProcessID,CPUValue,MEMWorkingSet,MEMPrivateBytes,Owner,ProcessName,CommandLine -auto 
+$TopOutputCPU = $TopProcesses | sort -property CPUValue -desc  | ? { $_.CPUValue -ne $null } | ft ProcessID,CPUValue,MEMWorkingSet,MEMPrivateBytes,Owner,ProcessName -auto | out-string
+$TopOutputCPU
+
+
+#
+# Grab larger picture for multiple Security tools, ActivClient, SCCM/MECM, IIS (w3wp)
+ 
+$SecurityProcesses = Get-Process | ? { ($_.ProcessName -eq "AcEvents" ) `
+	-OR ($_.ProcessName -eq "CcmExec") `
+	-OR ($_.ProcessName -eq "CmRcService") `
+	-OR ($_.ProcessName -eq "MsMpEng") `
+	-OR ($_.ProcessName -like "Tanium*" ) `
+	-OR ($_.ProcessName -eq "Tychion" ) `
+	-OR ($_.ProcessName -eq "FireSvc" ) `
+	-OR ($_.ProcessName -eq "hbss" ) `
+	-OR ($_.ProcessName -like "Fcag*" ) `
+	-OR ($_.ProcessName -eq "HipMgmt" ) `
+	-OR ($_.ProcessName -eq "Macmnsvc") `
+	-OR ($_.ProcessName -eq "Macompatsvc") `
+	-OR ($_.ProcessName -eq "Masvc" ) `
+	-OR ($_.ProcessName -eq "McShield" ) `
+	-OR ($_.ProcessName -like "Mfe*" ) `
+	-OR ($_.ProcessName -like "Nessus*" ) `
+	-OR ($_.ProcessName -like "Splunk*" ) `
+	-OR ($_.ProcessName -like "SolarWinds*" ) `
+	-OR ($_.ProcessName -like "TPython*" ) `
+	-OR ($_.ProcessName -like "w3wp*" )
+	}
+
+# Debug
+#$SecurityProcesses 
+$SecurityProcesses | sort -property CPU -desc  | ? { $_.CPU -ne $null }
+ 
+#####################
+# Security process details
+#
+# Commented these out 
+#          $ProcessCPU = (Get-Counter "\Process($($Process.ProcessName))\% processor time").CounterSamples | select InstanceName,CookedValue
+	#$ProcessWM = (Get-Counter "\Process($($Process.ProcessName))\Working Set").CounterSamples | select InstanceName,CookedValue 
+#          $ProcessPM = (Get-Counter "\Process($($Process.ProcessName))\Private Bytes").CounterSamples | select InstanceName,CookedValue 
+ 
+# View Processes from Security tools/agents 
+# 
+# Uncomment, to view processes #$Processes
+$TopSecurityProcesses = @() 
+ 
+Foreach ($Process in $SecurityProcesses)
+{
+    $ProcID = $Process.ID
+	$W32Proc = Get-WmiObject Win32_Process -filter "ProcessID = $ProcID"
+          $ProcessCPU = (Get-Counter "\Process($($Process.ProcessName))\% processor time").CounterSamples
+	$ProcessWM = (Get-Counter "\Process($($Process.ProcessName))\Working Set").CounterSamples
+          $ProcessPM = (Get-Counter "\Process($($Process.ProcessName))\Private Bytes").CounterSamples
+ 
+    $SingleProc = [pscustomobject]@{
+        ProcessName = $Process.ProcessName
+        # Cores = $CpuCores
+       ProcessID = $Process.Id
+        #CPUValue = [math]::Round($ProcessCPU.CookedValue / $CpuCores,2)
+	CPUValue = [math]::Round($ProcessCPU.CookedValue,2)
+        MEMWorkingSet  = [math]::Round($ProcessWM.CookedValue  / 1Mb )
+        MEMPrivateBytes = [math]::Round($ProcessPM.CookedValue  / 1Mb ) 
+           Owner = $W32Proc.GetOwner().User
+          CommandLine = $W32Proc.CommandLine
+       }
+    $TopSecurityProcesses += $SingleProc
+}
+ 
+#$TopSecurityProcesses = $TopSecurityProcesses | ft -AutoSize
+ 
+#
+# Debug
+# Uncomment, to view top processes
+#$TopSecurityProcesses
+$TopSecurityProcesses | ft -auto
+
+# Top processes by CPU
+# $TopSecurityProcesses | sort -property CPUValue -desc| ft ProcessName,ProcessID,CPUValue -auto
+# Top processes by Memory debug
+#$TopSecurityProcesses | sort -property MEMWorkingSet -desc | ft ProcessName,ProcessID,MEMWorkingSet,MEMPrivateBytes,CPUValue,Owner -auto
+ 
+ 
+# May need to rethink this
+$Output = $TopProcesses | out-string
+ 
+# Log event for Top processes
+$momapi.LogScriptEvent($ScriptName,100,0,"`n Top Processes to include Security tools/agents. `n `n ($Output)")
+ 
+# Gather memory debug
+#Get-WmiObject WIN32_PROCESS | Sort-Object -Property ws -Descending | Select-Object -first 10 ProcessID,Name,WS
+ 
+# Get Computer Object
+$CompObject = Get-WmiObject -Class WIN32_OperatingSystem  
+$Memory = ((($CompObject.TotalVisibleMemorySize - $CompObject.FreePhysicalMemory)*100)/ $CompObject.TotalVisibleMemorySize)
+ 
+Write-Host "Memory usage in Percentage:" $Memory
+ 
+# Top 5 process Memory Usage (MB)
+# Moved to top
+#$processMemoryUsage = Get-WmiObject WIN32_PROCESS | Sort-Object -Property ws -Descending | Select-Object -first 6 processname, @{Name="MemUsage(MB)";Expression={[math]::round($_.ws / 1mb)}}
+ 
+# Process table debug
+$processMemoryUsage
+
+$processMemoryUsage = $processMemoryUsage | out-string
+ 
+ 
+# End main section of script to gather additional data for alert description
+#=================================================================================
+ 
+ 
+# Output Result = BAD to ensure our final condition detection will work.  This should be left alone
+$bag.AddValue("Result","BAD")
+ 
+# Output our standard performance data in propertybags to be able to add them to the alert description
+#$bag.AddValue("Object Name",$ObjectName)
+#$bag.AddValue("Counter Name",$CounterName)
+#$bag.AddValue("Instance Name",$InstanceName)
+#$bag.AddValue("Last Sampled Value",$SampleValue)
+#$bag.AddValue("Number of Samples",$NumSamples)
+ 
+# Output your custom propertybags you gather from the script
+#$bag.AddValue("Processes by CPU",$TopOutputCPU)
+#$bag.AddValue("Processes by Memory",$processMemoryUsage)
+
+# Log 
+$Summary = "$DSMessage`n$TopOutputCPU`n$processMemoryUsage`n `nDisclaimer:  This diagnostic output is to document top procesesses CPU/Memory, and the offending process/application"
+
+	$bag.AddValue('Count',$Test)
+	$bag.AddValue('Message',$DSMessage)
+	$bag.AddValue('Summary',$Summary)
+	
+
+# Output all bags
+$bag
+ 
+#Log an event for script ending and total execution time.
+$EndTime = Get-Date
+$ScriptTime = ($EndTime - $StartTime).TotalSeconds
+$momapi.LogScriptEvent($ScriptName,100,0,"Ending monitor script. Total runtime ($ScriptTime) seconds.")
+#=================================================================================
+# End of script
+		  </ScriptBody>
+		  <TimeoutSeconds>360</TimeoutSeconds>
+		</WriteAction>
+      </Recovery>
+      <Recovery ID="Proactive.TopProcess.Monitoring.Script.Memory.Recovery" Accessibility="Public" Enabled="true" Target="MWS6D!Microsoft.Windows.Server.10.0.OperatingSystem" Monitor="MWS6M!Microsoft.Windows.Server.10.0.OperatingSystem.PercentCommittedBytesInUse" ResetMonitor="true" ExecuteOnState="Error" Remotable="true" Timeout="300">
+        <Category>Custom</Category>
+		<WriteAction ID="PSWA" TypeID="Windows!Microsoft.Windows.PowerShellWriteAction">
+		  <ScriptName>Proactive.TopProcess.Monitoring.Script.Memory.Recovery.v1014.ps1</ScriptName>
+		  <ScriptBody>
+#=================================================================================
+#  Proactive TopProcess script for MaxConcurrentAPI recovery
+#
+#  Author:  Kevin Justin
+#  v1.0
+#=================================================================================
+
+
+# Constants section - modify stuff here:
+#=================================================================================
+# Assign script name variable for use in event logging.  
+# ScriptName should be the same as the ID of the module that the script is contained in
+$ScriptName = "Proactive.TopProcess.Monitoring.Script.Memory.Recovery.v1014.ps1"
+$EventID = "693"
+#=================================================================================
+
+
+# Starting Script section - All scripts get this
+#=================================================================================
+# Gather the start time of the script
+$StartTime = Get-Date
+#Set variable to be used in logging events
+$whoami = whoami
+# Load MOMScript API
+$momapi = New-Object -comObject MOM.ScriptAPI
+#Log script event that we are starting task
+$momapi.LogScriptEvent($ScriptName,$EventID,0,"`n Script is starting. `n Running as ($whoami).")
+#=================================================================================
+
+
+# PropertyBag Script section - Monitoring scripts get this
+#=================================================================================
+# Load SCOM PropertyBag function
+$bag = $momapi.CreatePropertyBag()
+#=================================================================================
+
+
+# Begin MAIN script section
+#=================================================================================
+#param ($ObjectName, $CounterName, $InstanceName, $SampleValue, $NumSamples)
+ 
+
+# Gather the start time of the script
+$StartTime = Get-Date
+ 
+# Load MomScript API and PropertyBag function 
+$momapi = new-object -comObject 'MOM.ScriptAPI'
+$bag = $momapi.CreatePropertyBag()
+ 
+# Set variables to be used in logging events
+$whoami = whoami
+ 
+#Log script event that we are starting task
+$momapi.LogScriptEvent($ScriptName,100,0, "Starting monitor script.   Running as ($whoami)")
+ 
+ 
+#=================================================================================
+# Start Main section of script to gather additional data for alert description 
+# This example will gather the processes that are consuming the most CPU AND Memory
+#
+# Set variables to empty
+ 
+$date = get-date -uFormat "%Y-%m-%d"
+
+#Proactive.TopProcess.Monitoring.Script.ATQ.Recovery
+$DSMessage = "Proactive Top Process Monitoring recovery for Memory on ($date)."
+
+
+$Processes = Get-Process | Sort CPU -Descending | Select -First 6 
+$CpuCores = (Get-WMIObject Win32_ComputerSystem).NumberOfLogicalProcessors
+ 
+# Top 5 process Memory Usage (MB)
+$processMemoryUsage = Get-WmiObject WIN32_PROCESS | Sort-Object -Property ws -Descending | Select-Object -first 6 processname, @{Name="MemUsage(MB)";Expression={[math]::round($_.ws / 1mb)}}
+ 
+ 
+$TopProcesses = @()
+ 
+Foreach ($Process in $Processes)
+{
+    $ProcID = $Process.ID
+	$W32Proc = Get-WmiObject Win32_Process -filter "ProcessID = $ProcID"
+          $ProcessCPU = (Get-Counter "\Process($($Process.ProcessName))\% processor time").CounterSamples
+	$ProcessWM = (Get-Counter "\Process($($Process.ProcessName))\Working Set").CounterSamples
+          $ProcessPM = (Get-Counter "\Process($($Process.ProcessName))\Private Bytes").CounterSamples
+ 
+    $SingleProc = [pscustomobject]@{
+        ProcessName = $Process.ProcessName
+        # Cores = $CpuCores
+       ProcessID = $Process.Id
+        #CPUValue = [math]::Round($ProcessCPU.CookedValue / $CpuCores,2)
+	CPUValue = [math]::Round($ProcessCPU.CookedValue,2)
+        MEMWorkingSet  = [math]::Round($ProcessWM.CookedValue  / 1Mb )
+        MEMPrivateBytes = [math]::Round($ProcessPM.CookedValue  / 1Mb )    
+           Owner = $W32Proc.GetOwner().User
+          CommandLine = $W32Proc.CommandLine
+
+       }
+    $TopProcesses += $SingleProc
+}
+ 
+# View Top CPU processes
+#$TopProcesses  | ft -AutoSize
+#$TopProcesses | sort -property CPUValue -desc  | ? { $_.CPUValue -ne $null } | ft ProcessID,CPUValue,MEMWorkingSet,MEMPrivateBytes,Owner,ProcessName,CommandLine -auto
+
+# $TopOutputCPU = $TopProcesses | sort -property CPUValue -desc  | ? { $_.CPUValue -ne $null } | ft ProcessID,CPUValue,MEMWorkingSet,MEMPrivateBytes,Owner,ProcessName,CommandLine -auto 
+$TopOutputCPU = $TopProcesses | sort -property CPUValue -desc  | ? { $_.CPUValue -ne $null } | ft ProcessID,CPUValue,MEMWorkingSet,MEMPrivateBytes,Owner,ProcessName -auto | out-string
+$TopOutputCPU
+
+
+#
+# Grab larger picture for multiple Security tools, ActivClient, SCCM/MECM, IIS (w3wp)
+ 
+$SecurityProcesses = Get-Process | ? { ($_.ProcessName -eq "AcEvents" ) `
+	-OR ($_.ProcessName -eq "CcmExec") `
+	-OR ($_.ProcessName -eq "CmRcService") `
+	-OR ($_.ProcessName -eq "MsMpEng") `
+	-OR ($_.ProcessName -like "Tanium*" ) `
+	-OR ($_.ProcessName -eq "Tychion" ) `
+	-OR ($_.ProcessName -eq "FireSvc" ) `
+	-OR ($_.ProcessName -eq "hbss" ) `
+	-OR ($_.ProcessName -like "Fcag*" ) `
+	-OR ($_.ProcessName -eq "HipMgmt" ) `
+	-OR ($_.ProcessName -eq "Macmnsvc") `
+	-OR ($_.ProcessName -eq "Macompatsvc") `
+	-OR ($_.ProcessName -eq "Masvc" ) `
+	-OR ($_.ProcessName -eq "McShield" ) `
+	-OR ($_.ProcessName -like "Mfe*" ) `
+	-OR ($_.ProcessName -like "Nessus*" ) `
+	-OR ($_.ProcessName -like "Splunk*" ) `
+	-OR ($_.ProcessName -like "SolarWinds*" ) `
+	-OR ($_.ProcessName -like "TPython*" ) `
+	-OR ($_.ProcessName -like "w3wp*" )
+	}
+
+# Debug
+#$SecurityProcesses 
+$SecurityProcesses | sort -property CPU -desc  | ? { $_.CPU -ne $null }
+ 
+#####################
+# Security process details
+#
+# Commented these out 
+#          $ProcessCPU = (Get-Counter "\Process($($Process.ProcessName))\% processor time").CounterSamples | select InstanceName,CookedValue
+	#$ProcessWM = (Get-Counter "\Process($($Process.ProcessName))\Working Set").CounterSamples | select InstanceName,CookedValue 
+#          $ProcessPM = (Get-Counter "\Process($($Process.ProcessName))\Private Bytes").CounterSamples | select InstanceName,CookedValue 
+ 
+# View Processes from Security tools/agents 
+# 
+# Uncomment, to view processes #$Processes
+$TopSecurityProcesses = @() 
+ 
+Foreach ($Process in $SecurityProcesses)
+{
+    $ProcID = $Process.ID
+	$W32Proc = Get-WmiObject Win32_Process -filter "ProcessID = $ProcID"
+          $ProcessCPU = (Get-Counter "\Process($($Process.ProcessName))\% processor time").CounterSamples
+	$ProcessWM = (Get-Counter "\Process($($Process.ProcessName))\Working Set").CounterSamples
+          $ProcessPM = (Get-Counter "\Process($($Process.ProcessName))\Private Bytes").CounterSamples
+ 
+    $SingleProc = [pscustomobject]@{
+        ProcessName = $Process.ProcessName
+        # Cores = $CpuCores
+       ProcessID = $Process.Id
+        #CPUValue = [math]::Round($ProcessCPU.CookedValue / $CpuCores,2)
+	CPUValue = [math]::Round($ProcessCPU.CookedValue,2)
+        MEMWorkingSet  = [math]::Round($ProcessWM.CookedValue  / 1Mb )
+        MEMPrivateBytes = [math]::Round($ProcessPM.CookedValue  / 1Mb ) 
+           Owner = $W32Proc.GetOwner().User
+          CommandLine = $W32Proc.CommandLine
+       }
+    $TopSecurityProcesses += $SingleProc
+}
+ 
+#$TopSecurityProcesses = $TopSecurityProcesses | ft -AutoSize
+ 
+#
+# Debug
+# Uncomment, to view top processes
+#$TopSecurityProcesses
+$TopSecurityProcesses | ft -auto
+
+# Top processes by CPU
+# $TopSecurityProcesses | sort -property CPUValue -desc| ft ProcessName,ProcessID,CPUValue -auto
+# Top processes by Memory debug
+#$TopSecurityProcesses | sort -property MEMWorkingSet -desc | ft ProcessName,ProcessID,MEMWorkingSet,MEMPrivateBytes,CPUValue,Owner -auto
+ 
+ 
+# May need to rethink this
+$Output = $TopProcesses | out-string
+ 
+# Log event for Top processes
+$momapi.LogScriptEvent($ScriptName,100,0,"`n Top Processes to include Security tools/agents. `n `n ($Output)")
+ 
+# Gather memory debug
+#Get-WmiObject WIN32_PROCESS | Sort-Object -Property ws -Descending | Select-Object -first 10 ProcessID,Name,WS
+ 
+# Get Computer Object
+$CompObject = Get-WmiObject -Class WIN32_OperatingSystem  
+$Memory = ((($CompObject.TotalVisibleMemorySize - $CompObject.FreePhysicalMemory)*100)/ $CompObject.TotalVisibleMemorySize)
+ 
+Write-Host "Memory usage in Percentage:" $Memory
+ 
+# Top 5 process Memory Usage (MB)
+# Moved to top
+#$processMemoryUsage = Get-WmiObject WIN32_PROCESS | Sort-Object -Property ws -Descending | Select-Object -first 6 processname, @{Name="MemUsage(MB)";Expression={[math]::round($_.ws / 1mb)}}
+ 
+# Process table debug
+$processMemoryUsage
+
+$processMemoryUsage = $processMemoryUsage | out-string
+ 
+ 
+# End main section of script to gather additional data for alert description
+#=================================================================================
+ 
+ 
+# Output Result = BAD to ensure our final condition detection will work.  This should be left alone
+$bag.AddValue("Result","BAD")
+ 
+# Output our standard performance data in propertybags to be able to add them to the alert description
+#$bag.AddValue("Object Name",$ObjectName)
+#$bag.AddValue("Counter Name",$CounterName)
+#$bag.AddValue("Instance Name",$InstanceName)
+#$bag.AddValue("Last Sampled Value",$SampleValue)
+#$bag.AddValue("Number of Samples",$NumSamples)
+ 
+# Output your custom propertybags you gather from the script
+#$bag.AddValue("Processes by CPU",$TopOutputCPU)
+#$bag.AddValue("Processes by Memory",$processMemoryUsage)
+
+# Log 
+$Summary = "$DSMessage`n$TopOutputCPU`n$processMemoryUsage`n `nDisclaimer:  This diagnostic output is to document top procesesses CPU/Memory, and the offending process/application"
+
+	$bag.AddValue('Count',$Test)
+	$bag.AddValue('Message',$DSMessage)
+	$bag.AddValue('Summary',$Summary)
+	
+
+# Output all bags
+$bag
+ 
+#Log an event for script ending and total execution time.
+$EndTime = Get-Date
+$ScriptTime = ($EndTime - $StartTime).TotalSeconds
+$momapi.LogScriptEvent($ScriptName,100,0,"Ending monitor script. Total runtime ($ScriptTime) seconds.")
+#=================================================================================
+# End of script
+		  </ScriptBody>
+		  <TimeoutSeconds>360</TimeoutSeconds>
+		</WriteAction>
+      </Recovery>
+      <Recovery ID="Proactive.TopProcess.Monitoring.Script.WMI.Recovery" Accessibility="Public" Enabled="true" Target="SC!Microsoft.SystemCenter.Agent" Monitor="SCCore!Microsoft.SystemCenter.WMIFunctionalMonitor" ResetMonitor="true" ExecuteOnState="Error" Remotable="true" Timeout="300">
+        <Category>Custom</Category>
+		<WriteAction ID="PSWA" TypeID="Windows!Microsoft.Windows.PowerShellWriteAction">
+		  <ScriptName>Proactive.TopProcess.Monitoring.Script.WMI.Recovery.v1014.ps1</ScriptName>
+		  <ScriptBody>
+#=================================================================================
+#  Proactive TopProcess script for GPO recovery
+#
+#  Author:  Kevin Justin
+#  v1.0
+#=================================================================================
+
+
+# Constants section - modify stuff here:
+#=================================================================================
+# Assign script name variable for use in event logging.  
+# ScriptName should be the same as the ID of the module that the script is contained in
+$ScriptName = "Proactive.TopProcess.Monitoring.Script.WMI.Recovery.v1014.ps1"
+$EventID = "693"
+#=================================================================================
+
+
+# Starting Script section - All scripts get this
+#=================================================================================
+# Gather the start time of the script
+$StartTime = Get-Date
+#Set variable to be used in logging events
+$whoami = whoami
+# Load MOMScript API
+$momapi = New-Object -comObject MOM.ScriptAPI
+#Log script event that we are starting task
+$momapi.LogScriptEvent($ScriptName,$EventID,0,"`n Script is starting. `n Running as ($whoami).")
+#=================================================================================
+
+
+# PropertyBag Script section - Monitoring scripts get this
+#=================================================================================
+# Load SCOM PropertyBag function
+$bag = $momapi.CreatePropertyBag()
+#=================================================================================
+
+
+# Begin MAIN script section
+#=================================================================================
+#param ($ObjectName, $CounterName, $InstanceName, $SampleValue, $NumSamples)
+ 
+
+# Gather the start time of the script
+$StartTime = Get-Date
+ 
+# Load MomScript API and PropertyBag function 
+$momapi = new-object -comObject 'MOM.ScriptAPI'
+$bag = $momapi.CreatePropertyBag()
+ 
+# Set variables to be used in logging events
+$whoami = whoami
+ 
+#Log script event that we are starting task
+$momapi.LogScriptEvent($ScriptName,100,0, "Starting monitor script.   Running as ($whoami)")
+ 
+ 
+#=================================================================================
+# Start Main section of script to gather additional data for alert description 
+# This example will gather the processes that are consuming the most CPU AND Memory
+#
+# Set variables to empty
+ 
+$date = get-date -uFormat "%Y-%m-%d"
+
+#Proactive.TopProcess.Monitoring.Script.ATQ.Recovery
+$DSMessage = "Proactive Top Process Monitoring recovery for WMI on ($date)."
+
+
+$Processes = Get-Process | Sort CPU -Descending | Select -First 6 
+$CpuCores = (Get-WMIObject Win32_ComputerSystem).NumberOfLogicalProcessors
+ 
+# Top 5 process Memory Usage (MB)
+$processMemoryUsage = Get-WmiObject WIN32_PROCESS | Sort-Object -Property ws -Descending | Select-Object -first 6 processname, @{Name="MemUsage(MB)";Expression={[math]::round($_.ws / 1mb)}}
+ 
+ 
+$TopProcesses = @()
+ 
+Foreach ($Process in $Processes)
+{
+    $ProcID = $Process.ID
+	$W32Proc = Get-WmiObject Win32_Process -filter "ProcessID = $ProcID"
+          $ProcessCPU = (Get-Counter "\Process($($Process.ProcessName))\% processor time").CounterSamples
+	$ProcessWM = (Get-Counter "\Process($($Process.ProcessName))\Working Set").CounterSamples
+          $ProcessPM = (Get-Counter "\Process($($Process.ProcessName))\Private Bytes").CounterSamples
+ 
+    $SingleProc = [pscustomobject]@{
+        ProcessName = $Process.ProcessName
+        # Cores = $CpuCores
+       ProcessID = $Process.Id
+        #CPUValue = [math]::Round($ProcessCPU.CookedValue / $CpuCores,2)
+	CPUValue = [math]::Round($ProcessCPU.CookedValue,2)
+        MEMWorkingSet  = [math]::Round($ProcessWM.CookedValue  / 1Mb )
+        MEMPrivateBytes = [math]::Round($ProcessPM.CookedValue  / 1Mb )    
+           Owner = $W32Proc.GetOwner().User
+          CommandLine = $W32Proc.CommandLine
+
+       }
+    $TopProcesses += $SingleProc
+}
+ 
+# View Top CPU processes
+#$TopProcesses  | ft -AutoSize
+#$TopProcesses | sort -property CPUValue -desc  | ? { $_.CPUValue -ne $null } | ft ProcessID,CPUValue,MEMWorkingSet,MEMPrivateBytes,Owner,ProcessName,CommandLine -auto
+
+# $TopOutputCPU = $TopProcesses | sort -property CPUValue -desc  | ? { $_.CPUValue -ne $null } | ft ProcessID,CPUValue,MEMWorkingSet,MEMPrivateBytes,Owner,ProcessName,CommandLine -auto 
+$TopOutputCPU = $TopProcesses | sort -property CPUValue -desc  | ? { $_.CPUValue -ne $null } | ft ProcessID,CPUValue,MEMWorkingSet,MEMPrivateBytes,Owner,ProcessName -auto | out-string
+$TopOutputCPU
+
+
+#
+# Grab larger picture for multiple Security tools, ActivClient, SCCM/MECM, IIS (w3wp)
+ 
+$SecurityProcesses = Get-Process | ? { ($_.ProcessName -eq "AcEvents" ) `
+	-OR ($_.ProcessName -eq "CcmExec") `
+	-OR ($_.ProcessName -eq "CmRcService") `
+	-OR ($_.ProcessName -eq "MsMpEng") `
+	-OR ($_.ProcessName -like "Tanium*" ) `
+	-OR ($_.ProcessName -eq "Tychion" ) `
+	-OR ($_.ProcessName -eq "FireSvc" ) `
+	-OR ($_.ProcessName -eq "hbss" ) `
+	-OR ($_.ProcessName -like "Fcag*" ) `
+	-OR ($_.ProcessName -eq "HipMgmt" ) `
+	-OR ($_.ProcessName -eq "Macmnsvc") `
+	-OR ($_.ProcessName -eq "Macompatsvc") `
+	-OR ($_.ProcessName -eq "Masvc" ) `
+	-OR ($_.ProcessName -eq "McShield" ) `
+	-OR ($_.ProcessName -like "Mfe*" ) `
+	-OR ($_.ProcessName -like "Nessus*" ) `
+	-OR ($_.ProcessName -like "Splunk*" ) `
+	-OR ($_.ProcessName -like "SolarWinds*" ) `
+	-OR ($_.ProcessName -like "TPython*" ) `
+	-OR ($_.ProcessName -like "w3wp*" )
+	}
+
+# Debug
+#$SecurityProcesses 
+$SecurityProcesses | sort -property CPU -desc  | ? { $_.CPU -ne $null }
+ 
+#####################
+# Security process details
+#
+# Commented these out 
+#          $ProcessCPU = (Get-Counter "\Process($($Process.ProcessName))\% processor time").CounterSamples | select InstanceName,CookedValue
+	#$ProcessWM = (Get-Counter "\Process($($Process.ProcessName))\Working Set").CounterSamples | select InstanceName,CookedValue 
+#          $ProcessPM = (Get-Counter "\Process($($Process.ProcessName))\Private Bytes").CounterSamples | select InstanceName,CookedValue 
+ 
+# View Processes from Security tools/agents 
+# 
+# Uncomment, to view processes #$Processes
+$TopSecurityProcesses = @() 
+ 
+Foreach ($Process in $SecurityProcesses)
+{
+    $ProcID = $Process.ID
+	$W32Proc = Get-WmiObject Win32_Process -filter "ProcessID = $ProcID"
+          $ProcessCPU = (Get-Counter "\Process($($Process.ProcessName))\% processor time").CounterSamples
+	$ProcessWM = (Get-Counter "\Process($($Process.ProcessName))\Working Set").CounterSamples
+          $ProcessPM = (Get-Counter "\Process($($Process.ProcessName))\Private Bytes").CounterSamples
+ 
+    $SingleProc = [pscustomobject]@{
+        ProcessName = $Process.ProcessName
+        # Cores = $CpuCores
+       ProcessID = $Process.Id
+        #CPUValue = [math]::Round($ProcessCPU.CookedValue / $CpuCores,2)
+	CPUValue = [math]::Round($ProcessCPU.CookedValue,2)
+        MEMWorkingSet  = [math]::Round($ProcessWM.CookedValue  / 1Mb )
+        MEMPrivateBytes = [math]::Round($ProcessPM.CookedValue  / 1Mb ) 
+           Owner = $W32Proc.GetOwner().User
+          CommandLine = $W32Proc.CommandLine
+       }
+    $TopSecurityProcesses += $SingleProc
+}
+ 
+#$TopSecurityProcesses = $TopSecurityProcesses | ft -AutoSize
+ 
+#
+# Debug
+# Uncomment, to view top processes
+#$TopSecurityProcesses
+$TopSecurityProcesses | ft -auto
+
+# Top processes by CPU
+# $TopSecurityProcesses | sort -property CPUValue -desc| ft ProcessName,ProcessID,CPUValue -auto
+# Top processes by Memory debug
+#$TopSecurityProcesses | sort -property MEMWorkingSet -desc | ft ProcessName,ProcessID,MEMWorkingSet,MEMPrivateBytes,CPUValue,Owner -auto
+ 
+ 
+# May need to rethink this
+$Output = $TopProcesses | out-string
+ 
+# Log event for Top processes
+$momapi.LogScriptEvent($ScriptName,100,0,"`n Top Processes to include Security tools/agents. `n `n ($Output)")
+ 
+# Gather memory debug
+#Get-WmiObject WIN32_PROCESS | Sort-Object -Property ws -Descending | Select-Object -first 10 ProcessID,Name,WS
+ 
+# Get Computer Object
+$CompObject = Get-WmiObject -Class WIN32_OperatingSystem  
+$Memory = ((($CompObject.TotalVisibleMemorySize - $CompObject.FreePhysicalMemory)*100)/ $CompObject.TotalVisibleMemorySize)
+ 
+Write-Host "Memory usage in Percentage:" $Memory
+ 
+# Top 5 process Memory Usage (MB)
+# Moved to top
+#$processMemoryUsage = Get-WmiObject WIN32_PROCESS | Sort-Object -Property ws -Descending | Select-Object -first 6 processname, @{Name="MemUsage(MB)";Expression={[math]::round($_.ws / 1mb)}}
+ 
+# Process table debug
+$processMemoryUsage
+
+$processMemoryUsage = $processMemoryUsage | out-string
+ 
+ 
+# End main section of script to gather additional data for alert description
+#=================================================================================
+ 
+ 
+# Output Result = BAD to ensure our final condition detection will work.  This should be left alone
+$bag.AddValue("Result","BAD")
+ 
+# Output our standard performance data in propertybags to be able to add them to the alert description
+#$bag.AddValue("Object Name",$ObjectName)
+#$bag.AddValue("Counter Name",$CounterName)
+#$bag.AddValue("Instance Name",$InstanceName)
+#$bag.AddValue("Last Sampled Value",$SampleValue)
+#$bag.AddValue("Number of Samples",$NumSamples)
+ 
+# Output your custom propertybags you gather from the script
+#$bag.AddValue("Processes by CPU",$TopOutputCPU)
+#$bag.AddValue("Processes by Memory",$processMemoryUsage)
+
+# Log 
+$Summary = "$DSMessage`n$TopOutputCPU`n$processMemoryUsage`n `nDisclaimer:  This diagnostic output is to document top procesesses CPU/Memory, and the offending process/application"
+
+	$bag.AddValue('Count',$Test)
+	$bag.AddValue('Message',$DSMessage)
+	$bag.AddValue('Summary',$Summary)
+	
+
+# Output all bags
+$bag
+ 
+#Log an event for script ending and total execution time.
+$EndTime = Get-Date
+$ScriptTime = ($EndTime - $StartTime).TotalSeconds
+$momapi.LogScriptEvent($ScriptName,100,0,"Ending monitor script. Total runtime ($ScriptTime) seconds.")
+#=================================================================================
+# End of script
+		  </ScriptBody>
+		  <TimeoutSeconds>360</TimeoutSeconds>
+		</WriteAction>
+      </Recovery>
+    </Recoveries>
+    <Overrides>
+    </Overrides>
+  </Monitoring>
+  <Presentation>
+    <StringResources>
+	  <StringResource ID="Proactive.TopProcess.Monitoring.Customizations.SummaryReport.Script.Alert.Rule.AlertMessage" />
+      <StringResource ID="Proactive.TopProcess.Monitoring.Customizations.SummaryReport.Script.Task.Alert.Rule.AlertMessage" />
+      <StringResource ID="Proactive.TopProcess.Monitoring.Diagnostic.Script.PA.Task.Alert.Rule.AlertMessage" />
+	  <StringResource ID="Proactive.TopProcess.Monitoring.Diagnostic.Script.OS.Task.Alert.Rule.AlertMessage" />
+      <StringResource ID="Proactive.TopProcess.Monitoring.Diagnostic.Script.Agent.Task.Alert.Rule.AlertMessage" />
+      <StringResource ID="Proactive.TopProcess.Monitoring.Recovery.Script.Alert.Rule.AlertMessage" />
+	</StringResources>
+  </Presentation>
+  <LanguagePacks>
+    <LanguagePack ID="ENU" IsDefault="false">
+      <DisplayStrings>
+        <DisplayString ElementID="Proactive.TopProcess.Monitoring.Customizations">
+          <Name>Proactive TopProcess Monitoring Customizations</Name>
+          <Description>
+v1.0.1.4  18 Jul 2023 Updated reports to informational
+v1.0.1.3  24 Feb 2023 Removed diagnostics
+v1.0.1.0  28 Jul 2022 Updates with Recovery tasks
+v1.0.0.7  12 May 2022 Updated for AD TimeSkew and Replication monitors, PA updated for 692 event output to Server OS class
+v1.0.0.3  28 Apr 2022 Updated with ATQ, GPO Monitor diagnostics, corrected PA to PowerShell
+v1.0.0.0  12 Apr 2022 Created Proactive TopProcess monitoring customizations pack</Description>
+        </DisplayString>
+
+        <DisplayString ElementID="Proactive.TopProcess.Monitoring.Customizations.SummaryReport.Script.DataSource">	
+          <Name>Proactive DailyTasks Proactive.TopProcess.Service Alerts summary Datasource</Name>
+          <Description>This datasource generates Proactive.TopProcess.Summary Alerts</Description>
+        </DisplayString>
+        <DisplayString ElementID="Proactive.TopProcess.Monitoring.Customizations.Script.DataSource">	
+          <Name>Proactive TopProcess Monitoring Customizations Script Datasource</Name>
+          <Description>This datasource generates diagnost script data for top memory/cpu process</Description>
+        </DisplayString>
+
+        <DisplayString ElementID="Proactive.TopProcess.Monitoring.Customizations.SummaryReport.Script.WA">	
+          <Name>Proactive TopProcess Monitoring Summary report and auto-close on-demand task</Name>
+          <Description>This write-action task generates TopProcess Monitoring diagnostic summary report and auto-close write action</Description>
+        </DisplayString>
+        <DisplayString ElementID="Proactive.TopProcess.Monitoring.Diagnostic.Script.WA">	
+          <Name>Proactive TopProcess Monitoring on-demand task</Name>
+          <Description>This write-action task generates TopProcess Monitoring diagnostic data</Description>
+        </DisplayString>
+
+        <DisplayString ElementID="Proactive.TopProcess.Monitoring.Customizations.SummaryReport.Script.Alert.Rule">
+          <Name>NG DailyTasks Proactive TopProcess Summary Report Script Alert Rule</Name>
+          <Description>Proactive Scheduled rule to kick off summary datasource at 0615 M-F</Description>
+        </DisplayString>
+        <DisplayString ElementID="Proactive.TopProcess.Monitoring.Customizations.SummaryReport.Script.Alert.Rule.AlertMessage">
+          <Name>Proactive DailyTasks Proactive TopProcess Alerts Summary Report Script Alert Rule</Name>
+          <Description>{1}
+
+{2}</Description>
+        </DisplayString>
+        <DisplayString ElementID="Proactive.TopProcess.Monitoring.Customizations.SummaryReport.Script.Task.Alert.Rule">
+          <Name>Proactive DailyTasks Proactive TopProcess Alerts Summary Report manual Task Rule</Name>
+        </DisplayString>
+        <DisplayString ElementID="Proactive.TopProcess.Monitoring.Customizations.SummaryReport.Script.Task.Alert.Rule.AlertMessage">
+          <Name>Proactive DailyTasks Proactive TopProcess Alerts Summary Report Script Task Rule Alert</Name>
+          <Description>{0}</Description>
+        </DisplayString>
+        <DisplayString ElementID="Proactive.TopProcess.Monitoring.Diagnostic.Script.Agent.Task.Alert.Rule">
+          <Name>Proactive TopProcess Agent Script Manual Task Rule</Name>
+        </DisplayString>
+        <DisplayString ElementID="Proactive.TopProcess.Monitoring.Diagnostic.Script.Agent.Task.Alert.Rule.AlertMessage">
+          <Name>Proactive TopProcess Agent Script Manual Task Rule Alert</Name>
+          <Description>{0}</Description>
+        </DisplayString>
+        <DisplayString ElementID="Proactive.TopProcess.Monitoring.Diagnostic.Script.OS.Task.Alert.Rule">
+          <Name>Proactive TopProcess OS Script Manual Task Rule</Name>
+        </DisplayString>
+        <DisplayString ElementID="Proactive.TopProcess.Monitoring.Diagnostic.Script.OS.Task.Alert.Rule.AlertMessage">
+          <Name>Proactive TopProcess OS Script Task Rule Alert</Name>
+          <Description>{0}</Description>
+        </DisplayString>
+        <DisplayString ElementID="Proactive.TopProcess.Monitoring.Diagnostic.Script.PA.Task.Alert.Rule">
+          <Name>Proactive TopProcess Script PA manual Task Rule</Name>
+        </DisplayString>
+        <DisplayString ElementID="Proactive.TopProcess.Monitoring.Diagnostic.Script.PA.Task.Alert.Rule.AlertMessage">
+          <Name>Proactive TopProcess Script PA Manual Task Rule Alert</Name>
+          <Description>{0}</Description>
+        </DisplayString>
+        <DisplayString ElementID="Proactive.TopProcess.Monitoring.Recovery.Script.Alert.Rule">
+          <Name>Proactive TopProcess Recovery Script WA Alert Rule</Name>
+        </DisplayString>
+        <DisplayString ElementID="Proactive.TopProcess.Monitoring.Recovery.Script.Alert.Rule.AlertMessage">
+          <Name>Proactive TopProcess Recovery Script WA Alert Rule</Name>
+          <Description>{0}</Description>
+        </DisplayString>
+
+        <DisplayString ElementID="Proactive.TopProcess.Monitoring.Customizations.SummaryReport.Script.Task">
+          <Name>Proactive TopProcess Service Alerts Summary Report Script Task</Name>
+          <Description>Proactive TopProcess Summary Report task to kick off on-demand</Description>
+        </DisplayString>
+        <DisplayString ElementID="Proactive.TopProcess.Monitoring.Diagnostic.OS.Script.Task">
+          <Name>Proactive TopProcess Service Alerts OS class Script Task</Name>
+          <Description>Proactive TopProcess Alerts OS class task to kick off on-demand</Description>
+        </DisplayString>
+        <DisplayString ElementID="Proactive.TopProcess.Monitoring.Diagnostic.Agent.Script.Task">
+          <Name>Proactive TopProcess Service Alerts SCOM Agent class Script Task</Name>
+          <Description>Proactive TopProcess SCOM Agent class task to kick off on-demand</Description>
+        </DisplayString>
+
+		<DisplayString ElementID="Proactive.TopProcess.Monitoring.Script.AvailableMemory.Recovery">
+          <Name>Proactive TopProcess Monitoring Script Available Memory Recovery</Name>
+          <Description>Proactive TopProcess Available Memory Recovery</Description>
+        </DisplayString>
+		<DisplayString ElementID="Proactive.TopProcess.Monitoring.Script.CPU.Recovery">
+          <Name>Proactive TopProcess Monitoring Script CPU Recovery</Name>
+          <Description>Proactive TopProcess CPU Recovery</Description>
+        </DisplayString>
+		<DisplayString ElementID="Proactive.TopProcess.Monitoring.Script.MaxConcurrent.Recovery">
+          <Name>Proactive TopProcess Monitoring Script MaxConcurrentAPI Recovery</Name>
+          <Description>Proactive TopProcess MaxConcurrentAPI Recovery</Description>
+        </DisplayString>
+		<DisplayString ElementID="Proactive.TopProcess.Monitoring.Script.Memory.Recovery">
+          <Name>Proactive TopProcess Monitoring Script Memory Recovery</Name>
+          <Description>Proactive TopProcess Memory Recovery</Description>
+        </DisplayString>
+		<DisplayString ElementID="Proactive.TopProcess.Monitoring.Script.WMI.Recovery">
+          <Name>Proactive TopProcess Monitoring Script WMI Recovery</Name>
+          <Description>Proactive TopProcess WMI Recovery</Description>
+        </DisplayString>
+      </DisplayStrings>
+      <KnowledgeArticles>
+        <KnowledgeArticle ElementID="Proactive.TopProcess.Monitoring.Diagnostic.Script.PA.Task.Alert.Rule" Visible="true">
+          <MamlContent>
+            <section xmlns:maml="http://schemas.microsoft.com/maml/2004/10" xmlns="http://schemas.microsoft.com/maml/2004/10">
+              <maml:title>Summary</maml:title>
+              <maml:para>The Proactive TopProcess Rule looks for top 6 processes, Security, and logs CPU/Memory details of process</maml:para>
+            </section>
+            <section xmlns:maml="http://schemas.microsoft.com/maml/2004/10" xmlns="http://schemas.microsoft.com/maml/2004/10">
+              <maml:title>Causes</maml:title>
+              <maml:para>Diagnostic can run be run manually and is automatic for a few monitors:</maml:para>
+              <maml:para />
+              <maml:list>
+                <maml:listItem>
+                  <maml:para>Diagnostic tasks run automatically for Operating System, AD 2016+ Domain Controller, SCOM Agent classes</maml:para>
+                </maml:listItem>
+                <maml:listItem>
+                  <maml:para>Diagnostic tasks run manually for Operating System, AD 2016+ Domain Controller, SCOM Agent classes</maml:para>
+                </maml:listItem>
+                <maml:listItem>
+                  <maml:para>NOTE:  This diagnostic script is designed to aid SystemOwner/AppOwner to resolve what processes may impact server performance</maml:para>
+                </maml:listItem>
+              </maml:list>
+            </section>
+            <section xmlns:maml="http://schemas.microsoft.com/maml/2004/10" xmlns="http://schemas.microsoft.com/maml/2004/10">
+              <maml:title>Resolutions</maml:title>
+              <maml:para>Try the following troubleshooting steps to attempt to fix the problem</maml:para>
+              <maml:para />
+              <maml:list>
+                <maml:listItem>
+                  <maml:para>RDP to affected server to troubleshoot.</maml:para>
+                  <maml:para>After RDP, verify key services are running</maml:para>
+                </maml:listItem>
+                <maml:listItem>
+                  <maml:para>Leverage PowerShell (as Admin) to run 'get-service' to verify service state</maml:para>
+                  <maml:para>In PowerShell window (MUST be running as Admin), run:</maml:para>
+                  <maml:para>     Restart any services down</maml:para>
+                  <maml:para>     Example:</maml:para>
+                  <maml:para>     'get-service healthservice | start-service' to restart affected service</maml:para>
+                </maml:listItem>
+                <maml:listItem>
+                  <maml:para>Additionally, run get-eventlog command to see how current issue is, or if impact is current and on-going.</maml:para>
+				  <maml:para>Command to run:  get-eventlog -LogName "System" -newest 15</maml:para>
+                </maml:listItem>
+              </maml:list>
+            </section>
+          </MamlContent>
+        </KnowledgeArticle>
+        <KnowledgeArticle ElementID="Proactive.TopProcess.Monitoring.Diagnostic.Script.OS.Task.Alert.Rule" Visible="true">
+          <MamlContent>
+            <section xmlns:maml="http://schemas.microsoft.com/maml/2004/10" xmlns="http://schemas.microsoft.com/maml/2004/10">
+              <maml:title>Summary</maml:title>
+              <maml:para>The Proactive TopProcess Rule looks for top 6 processes, Security, and logs CPU/Memory details of process</maml:para>
+            </section>
+            <section xmlns:maml="http://schemas.microsoft.com/maml/2004/10" xmlns="http://schemas.microsoft.com/maml/2004/10">
+              <maml:title>Causes</maml:title>
+              <maml:para>Diagnostic can run be run manually and is automatic for a few monitors:</maml:para>
+              <maml:para />
+              <maml:list>
+                <maml:listItem>
+                  <maml:para>Diagnostic tasks run automatically for Operating System, AD 2016+ Domain Controller, SCOM Agent classes</maml:para>
+                </maml:listItem>
+                <maml:listItem>
+                  <maml:para>Diagnostic tasks run manually for Operating System, AD 2016+ Domain Controller, SCOM Agent classes</maml:para>
+                </maml:listItem>
+                <maml:listItem>
+                  <maml:para>NOTE:  This diagnostic script is designed to aid SystemOwner/AppOwner to resolve what processes may impact server performance</maml:para>
+                </maml:listItem>
+              </maml:list>
+            </section>
+            <section xmlns:maml="http://schemas.microsoft.com/maml/2004/10" xmlns="http://schemas.microsoft.com/maml/2004/10">
+              <maml:title>Resolutions</maml:title>
+              <maml:para>Try the following troubleshooting steps to attempt to fix the problem</maml:para>
+              <maml:para />
+              <maml:list>
+                <maml:listItem>
+                  <maml:para>RDP to affected server to troubleshoot.</maml:para>
+                  <maml:para>After RDP, verify key services are running</maml:para>
+                </maml:listItem>
+                <maml:listItem>
+                  <maml:para>Leverage PowerShell (as Admin) to run 'get-service' to verify service state</maml:para>
+                  <maml:para>In PowerShell window (MUST be running as Admin), run:</maml:para>
+                  <maml:para>     Restart any services down</maml:para>
+                  <maml:para>     Example:</maml:para>
+                  <maml:para>     'get-service healthservice | start-service' to restart affected service</maml:para>
+                </maml:listItem>
+                <maml:listItem>
+                  <maml:para>Additionally, run get-eventlog command to see how current issue is, or if impact is current and on-going.</maml:para>
+				  <maml:para>Command to run:  get-eventlog -LogName "System" -newest 15</maml:para>
+                </maml:listItem>
+              </maml:list>
+            </section>
+          </MamlContent>
+        </KnowledgeArticle>
+        <KnowledgeArticle ElementID="Proactive.TopProcess.Monitoring.Diagnostic.Script.Agent.Task.Alert.Rule" Visible="true">
+          <MamlContent>
+            <section xmlns:maml="http://schemas.microsoft.com/maml/2004/10" xmlns="http://schemas.microsoft.com/maml/2004/10">
+              <maml:title>Summary</maml:title>
+              <maml:para>The Proactive TopProcess Rule looks for top 6 processes, Security, and logs CPU/Memory details of process</maml:para>
+            </section>
+            <section xmlns:maml="http://schemas.microsoft.com/maml/2004/10" xmlns="http://schemas.microsoft.com/maml/2004/10">
+              <maml:title>Causes</maml:title>
+              <maml:para>Diagnostic can run be run manually and is automatic for a few monitors:</maml:para>
+              <maml:para />
+              <maml:list>
+                <maml:listItem>
+                  <maml:para>Diagnostic tasks run automatically for Operating System, AD 2016+ Domain Controller, SCOM Agent classes</maml:para>
+                </maml:listItem>
+                <maml:listItem>
+                  <maml:para>Diagnostic tasks run manually for Operating System, AD 2016+ Domain Controller, SCOM Agent classes</maml:para>
+                </maml:listItem>
+                <maml:listItem>
+                  <maml:para>NOTE:  This diagnostic script is designed to aid SystemOwner/AppOwner to resolve what processes may impact server performance</maml:para>
+                </maml:listItem>
+              </maml:list>
+            </section>
+            <section xmlns:maml="http://schemas.microsoft.com/maml/2004/10" xmlns="http://schemas.microsoft.com/maml/2004/10">
+              <maml:title>Resolutions</maml:title>
+              <maml:para>Try the following troubleshooting steps to attempt to fix the problem</maml:para>
+              <maml:para />
+              <maml:list>
+                <maml:listItem>
+                  <maml:para>RDP to affected server to troubleshoot.</maml:para>
+                  <maml:para>After RDP, verify key services are running</maml:para>
+                </maml:listItem>
+                <maml:listItem>
+                  <maml:para>Leverage PowerShell (as Admin) to run 'get-service' to verify service state</maml:para>
+                  <maml:para>In PowerShell window (MUST be running as Admin), run:</maml:para>
+                  <maml:para>     Restart any services down</maml:para>
+                  <maml:para>     Example:</maml:para>
+                  <maml:para>     'get-service healthservice | start-service' to restart affected service</maml:para>
+                </maml:listItem>
+                <maml:listItem>
+                  <maml:para>Additionally, run get-eventlog command to see how current issue is, or if impact is current and on-going.</maml:para>
+				  <maml:para>Command to run:  get-eventlog -LogName "System" -newest 15</maml:para>
+                </maml:listItem>
+              </maml:list>
+            </section>
+          </MamlContent>
+        </KnowledgeArticle>
+      </KnowledgeArticles>
+    </LanguagePack>
+  </LanguagePacks>
+</ManagementPack>
