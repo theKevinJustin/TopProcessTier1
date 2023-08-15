@@ -8,4 +8,3 @@ Get task manager output as a summary report, on-demand task, rule(s), and recove
 https://kevinjustin.com/blog/2023/08/14/top-process-powershell-script/
 
 ![image](https://github.com/theKevinJustin/TopProcessTier1/assets/98561452/072b6dac-8545-45e8-b29d-fb39202e7c7f)
-
